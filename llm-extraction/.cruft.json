@@ -1,0 +1,31 @@
+{
+  "template": "https://github.com/FAIRmat-NFDI/cookiecutter-nomad-plugin",
+  "commit": "521583b3e8b972c0c693a8735575cca0f100983e",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "full_name": "Sharat Patil",
+      "email": "patilsha@physik.hu-berlin.de",
+      "github_username": "pilar12",
+      "plugin_name": "llm-extraction",
+      "module_name": "llm_extraction",
+      "short_description": "Repo for LLM data extraction",
+      "version": "0.1.0",
+      "license": "MIT",
+      "include_schema_package": true,
+      "include_normalizer": false,
+      "include_parser": false,
+      "include_app": true,
+      "include_example_uploads": true,
+      "include_action": true,
+      "include_north_tools": false,
+      "north_tool_name": "n",
+      "_copy_without_render": [
+        "*.html"
+      ],
+      "_template": "https://github.com/FAIRmat-NFDI/cookiecutter-nomad-plugin",
+      "_commit": "521583b3e8b972c0c693a8735575cca0f100983e"
+    }
+  },
+  "directory": null
+}
