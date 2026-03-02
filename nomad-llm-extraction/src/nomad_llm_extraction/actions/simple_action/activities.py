@@ -1,6 +1,6 @@
 from temporalio import activity
 
-from llm_extraction.actions.simple_action.models import SimpleWorkflowInput
+from nomad_llm_extraction.actions.simple_action.models import SimpleWorkflowInput
 
 
 @activity.defn

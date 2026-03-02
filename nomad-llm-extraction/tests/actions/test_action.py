@@ -2,9 +2,9 @@ import pytest
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from llm_extraction.actions.simple_action.activities import greet
-from llm_extraction.actions.simple_action.models import SimpleWorkflowInput
-from llm_extraction.actions.simple_action.workflows import SimpleWorkflow
+from nomad_llm_extraction.actions.simple_action.activities import greet
+from nomad_llm_extraction.actions.simple_action.models import SimpleWorkflowInput
+from nomad_llm_extraction.actions.simple_action.workflows import SimpleWorkflow
 
 
 @pytest.mark.asyncio

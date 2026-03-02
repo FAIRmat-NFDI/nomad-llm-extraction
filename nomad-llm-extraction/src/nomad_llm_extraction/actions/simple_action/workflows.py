@@ -4,8 +4,8 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
-    from llm_extraction.actions.simple_action.activities import greet
-    from llm_extraction.actions.simple_action.models import SimpleWorkflowInput
+    from nomad_llm_extraction.actions.simple_action.activities import greet
+    from nomad_llm_extraction.actions.simple_action.models import SimpleWorkflowInput
 
 
 @workflow.defn

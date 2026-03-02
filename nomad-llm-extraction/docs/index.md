@@ -1,4 +1,4 @@
-# Welcome to the `llm-extraction` documentation
+# Welcome to the `nomad-llm-extraction` documentation
 
 Repo for LLM data extraction
 

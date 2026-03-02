@@ -14,8 +14,8 @@ class SimpleActionEntryPoint(ActionEntryPoint):
     def load(self):
         from nomad.actions import Action
 
-        from llm_extraction.actions.simple_action.activities import greet
-        from llm_extraction.actions.simple_action.workflows import SimpleWorkflow
+        from nomad_llm_extraction.actions.simple_action.activities import greet
+        from nomad_llm_extraction.actions.simple_action.workflows import SimpleWorkflow
 
         return Action(
             task_queue=self.task_queue,

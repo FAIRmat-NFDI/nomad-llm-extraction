@@ -1,8 +1,8 @@
-site_name: llm-extraction
+site_name: nomad-llm-extraction
 site_description: Repo for LLM data extraction
 site_author: Sharat Patil
 
-repo_url: https://github.com/pilar12/llm-extraction
+repo_url: https://github.com/FAIRmat-NFDI/nomad-llm-extraction
 edit_uri: ""
 
 nav:

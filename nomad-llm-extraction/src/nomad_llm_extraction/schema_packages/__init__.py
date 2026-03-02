@@ -6,7 +6,7 @@ class NewSchemaPackageEntryPoint(SchemaPackageEntryPoint):
     parameter: int = Field(0, description='Custom configuration parameter')
 
     def load(self):
-        from llm_extraction.schema_packages.schema_package import m_package
+        from nomad_llm_extraction.schema_packages.schema_package import m_package
 
         return m_package
 
