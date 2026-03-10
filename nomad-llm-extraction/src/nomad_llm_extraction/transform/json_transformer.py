@@ -27,8 +27,6 @@ def update_state(state, name, p_name, stype=None, **kwargs):
     n_state['p_name'] = p_name
     n_state['a_p_path'] = clean_path(f'{n_state["a_p_path"]}.{p_name}')
     n_state['p_path'] = clean_path(f'{n_state["p_path"]}.{p_name}')
-    n_state['path'] = clean_path(f'{n_state["p_path"]}.{name}')
-    n_state['a_path'] = clean_path(f'{n_state["a_p_path"]}.{name}')
     if stype == 'object':
         n_state['p_path'] = clean_path(
             f'{n_state["p_path"]}.{kwargs.get("ref_section", "allOf")}[{kwargs.get("idx", 0)}]'
@@ -37,19 +35,41 @@ def update_state(state, name, p_name, stype=None, **kwargs):
         n_state['a_p_path'] = clean_path(f'{n_state["a_p_path"]}[n]')
     else:
         n_state['p_path'] = clean_path(f'{n_state["p_path"]}.properties')
+    n_state['path'] = clean_path(f'{n_state["p_path"]}.{name}')
+    n_state['a_path'] = clean_path(f'{n_state["a_p_path"]}.{name}')
     return n_state
 
 
-def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, None)):
-    # try:
-    cond = default_cond if cond is None else cond
-    get_func_args = default_get_func_args if get_func_args is None else get_func_args
+def get_stype(section):
+    stype = section.get('type', '')
+    if stype == '':
+        stype = (
+            'object'
+            if 'allOf' in section or 'anyOf' in section or 'properties' in section
+            else stype
+        )
+        stype = 'array' if 'items' in section else stype
+    return stype
+
+
+def get_paths(
+    section,
+    state={},
+    cond=None,
+    get_func_args=lambda x, y: (y, None),
+    path_type='a_path',
+):
+
+    # For jsonschemas from pydantic models
     if section == {'type': None}:
         return {}
 
+    cond = default_cond if cond is None else cond
+    get_func_args = default_get_func_args if get_func_args is None else get_func_args
     all_paths = {}
     prop_paths = {}
     arr_paths = {}
+
     if not state:
         state = {
             k: ''
@@ -64,18 +84,12 @@ def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, Non
                 'type',
             ]
         }
+
     name = state['name']
     title = section.get('title', name)
     title = title if name == '' else name
 
-    stype = section.get('type', '')
-    if stype == '':
-        stype = (
-            'object'
-            if 'allOf' in section or 'anyOf' in section or 'properties' in section
-            else stype
-        )
-        stype = 'array' if 'items' in section else stype
+    stype = get_stype(section)
 
     if state['type'] == 'property' and cond(section, state):
         state, func_args = get_func_args(section, state)
@@ -84,10 +98,8 @@ def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, Non
             state['a_path'] = clean_path(f'{state["a_path"]}[n]')
             state['type'] = 'array_property'
             p = 'array'
-            # arr_paths.update({title:[state,func_args,'property']})
         elif stype == 'object':
             state['type'] = 'section_property'
-            # all_paths.update({title:[state,func_args,'property']})
         prop_paths.update({title: [state, func_args, p]})
 
     if stype == 'object':
@@ -95,11 +107,11 @@ def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, Non
             prop_state = update_state(state, prop_name, name)
             prop_state['type'] = 'property'
             prop_paths.update(
-                get_path_b2(prop_section, prop_state, cond, get_func_args)
+                get_paths(prop_section, prop_state, cond, get_func_args, path_type)
             )
         for i, v in prop_paths.items():
             v[0]['sname'] = clean_path(f'{title}.{i}')
-        prop_paths = {v[0]['a_path']: v for i, v in prop_paths.items()}
+        prop_paths = {v[0][path_type]: v for i, v in prop_paths.items()}
 
         sub_sections = [
             *[(i, 'allOf', s) for i, s in enumerate(section.get('allOf', []))],
@@ -110,18 +122,21 @@ def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, Non
                 state, '', name, 'object', idx=idx, ref_section=ref_section
             )
             all_state['type'] = 'sub_section'
-            all_paths.update(get_path_b2(sub_section, all_state, cond, get_func_args))
+            all_paths.update(get_paths(sub_section, all_state, cond, get_func_args))
         for i, v in all_paths.items():
             v[0]['sname'] = clean_path(f'{title}.{".".join(i.split(".")[:])}')
-        all_paths = {v[0]['a_path']: v for i, v in all_paths.items()}
+        all_paths = {v[0][path_type]: v for i, v in all_paths.items()}
 
     elif stype == 'array':
         arr_state = update_state(state, '', name, 'array')
         arr_state['type'] = 'array'
-        arr_paths.update(get_path_b2(section['items'], arr_state, cond, get_func_args))
+        arr_state['p_path'] = f'{arr_state["p_path"]}.items'
+        arr_paths.update(
+            get_paths(section['items'], arr_state, cond, get_func_args, path_type)
+        )
         for i, v in arr_paths.items():
             v[0]['sname'] = clean_path(f'{title}.{i}')
-        arr_paths = {v[0]['a_path']: [*v[0:-1], 'array'] for i, v in arr_paths.items()}
+        arr_paths = {v[0][path_type]: [*v[0:-1], 'array'] for i, v in arr_paths.items()}
 
     all_paths.update(arr_paths)
     all_paths.update(prop_paths)
@@ -129,13 +144,13 @@ def get_path_b2(section, state={}, cond=None, get_func_args=lambda x, y: (y, Non
     return all_paths
 
 
-def update_archive_b2(jbobj, paths, func_apply=None):
+def update_archive(jbobj, paths, func_apply=None):
     func_apply = default_func_apply if func_apply is None else func_apply
 
     if jbobj is None:
         return None
     if isinstance(jbobj, list):
-        return [update_archive_b2(i, paths, func_apply) for i in jbobj]
+        return [update_archive(i, paths, func_apply) for i in jbobj]
     for path, (state, func_args, stype) in paths.items():
         if stype == 'property' and check_path(jbobj, path):
             jbobj = func_apply(jbobj, path, func_args)
@@ -147,7 +162,7 @@ def update_archive_b2(jbobj, paths, func_apply=None):
                     n_state = deepcopy(state)
                     n_state['a_path'] = sub_paths[1][1:]
                     n_paths = {n_state['a_path']: [n_state, func_args, n_stype]}
-                    jbobj[sub_paths[0]] = update_archive_b2(
+                    jbobj[sub_paths[0]] = update_archive(
                         jbobj[sub_paths[0]], n_paths, func_apply
                     )
                 else:

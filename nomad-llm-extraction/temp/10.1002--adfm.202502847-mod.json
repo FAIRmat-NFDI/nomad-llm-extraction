@@ -1,0 +1,1786 @@
+[
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.4"
+        },
+        {
+          "abbreviation": "DMA",
+          "common_name": "Dimethylammonium",
+          "molecular_formula": "C2H8N+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "MA",
+          "common_name": "Methylammonium",
+          "molecular_formula": "CH6N+",
+          "coefficient": "0.2"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "3"
+        }
+      ],
+      "bandgap": {
+        "value": 1.67,
+        "unit": "eV"
+      },
+      "impurities": null,
+      "additives": null
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 19.45,
+      "unit": "%"
+    },
+    "jsc": {
+      "value": 21.05,
+      "unit": "mA cm^-2"
+    },
+    "voc": {
+      "value": 1.152,
+      "unit": "V"
+    },
+    "ff": {
+      "value": 80.18
+    },
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Control device with PC (PCBM/CB) solution",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 65,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 88,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 14,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 73,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 76,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 87,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 27,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 93,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 45,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 78,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 96,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 37,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 11,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.4"
+        },
+        {
+          "abbreviation": "DMA",
+          "common_name": "Dimethylammonium",
+          "molecular_formula": "C2H8N+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "MA",
+          "common_name": "Methylammonium",
+          "molecular_formula": "CH6N+",
+          "coefficient": "0.2"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "3"
+        }
+      ],
+      "bandgap": {
+        "value": 1.67,
+        "unit": "eV"
+      },
+      "impurities": null,
+      "additives": null
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 20.38,
+      "unit": "%"
+    },
+    "jsc": {
+      "value": 21.38,
+      "unit": "mA cm^-2"
+    },
+    "voc": {
+      "value": 1.171,
+      "unit": "V"
+    },
+    "ff": {
+      "value": 81.35
+    },
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Device with PCI (PCBM/CB+IPA) solution",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 74,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 56,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 57,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 55,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 39,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 45,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 72,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 19,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 55,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 87,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 57,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 25,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 71,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 24,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.4"
+        },
+        {
+          "abbreviation": "DMA",
+          "common_name": "Dimethylammonium",
+          "molecular_formula": "C2H8N+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "MA",
+          "common_name": "Methylammonium",
+          "molecular_formula": "CH6N+",
+          "coefficient": "0.2"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "3"
+        }
+      ],
+      "bandgap": {
+        "value": 1.67,
+        "unit": "eV"
+      },
+      "impurities": null,
+      "additives": null
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 20.34,
+      "unit": "%"
+    },
+    "jsc": {
+      "value": 21.2,
+      "unit": "mA cm^-2"
+    },
+    "voc": {
+      "value": 1.181,
+      "unit": "V"
+    },
+    "ff": {
+      "value": 81.2
+    },
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Device with sandwiched perovskite/PDAI2/PCBM structure",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 65,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 52,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 75,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 95,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 58,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 69,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 78,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PDAI2",
+        "thickness": null,
+        "functionality": "Other",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 55,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": "surface passivation"
+      },
+      {
+        "name": "PCBM",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 25,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 60,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 60,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 24,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 43,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.4"
+        },
+        {
+          "abbreviation": "DMA",
+          "common_name": "Dimethylammonium",
+          "molecular_formula": "C2H8N+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "MA",
+          "common_name": "Methylammonium",
+          "molecular_formula": "CH6N+",
+          "coefficient": "0.2"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "3"
+        }
+      ],
+      "bandgap": {
+        "value": 1.67,
+        "unit": "eV"
+      },
+      "impurities": null,
+      "additives": {
+        "abbreviation": "PDAI2",
+        "concentration": null
+      }
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 21.84,
+      "unit": "%"
+    },
+    "jsc": {
+      "value": 21.8,
+      "unit": "mA cm^-2"
+    },
+    "voc": {
+      "value": 1.204,
+      "unit": "V"
+    },
+    "ff": {
+      "value": 83.19
+    },
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Best performing device with PPCI (PCBM+PDAI2/CB+IPA) solution. Retained 92% of initial efficiency after 1500 h continuous illumination.",
+    "stability": {
+      "time": {
+        "value": 5400000.0,
+        "unit": "s"
+      },
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "humidity": {
+        "value": 40.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 25.0,
+        "unit": "\u00b0C"
+      },
+      "PCE_T80": null,
+      "PCE_at_the_start_of_the_experiment": {
+        "value": 21.84,
+        "unit": "%"
+      },
+      "PCE_after_1000_hours": null,
+      "PCE_at_the_end_of_experiment": {
+        "value": 20.09,
+        "unit": "%"
+      },
+      "potential_bias": "MPPT"
+    },
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 73,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 15,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 67,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 42,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 33,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 91,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 14,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 71,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM w/ PDAI2",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 67,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 51,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 40,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": "n-type doping"
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 17,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 69,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 14,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 37,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.4"
+        },
+        {
+          "abbreviation": "DMA",
+          "common_name": "Dimethylammonium",
+          "molecular_formula": "C2H8N+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.2"
+        },
+        {
+          "abbreviation": "MA",
+          "common_name": "Methylammonium",
+          "molecular_formula": "CH6N+",
+          "coefficient": "0.2"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "3"
+        }
+      ],
+      "bandgap": {
+        "value": 1.67,
+        "unit": "eV"
+      },
+      "impurities": null,
+      "additives": null
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 31.4,
+      "unit": "%"
+    },
+    "jsc": {
+      "value": 126.48,
+      "unit": "mA cm^-2"
+    },
+    "voc": {
+      "value": 0.892,
+      "unit": "V"
+    },
+    "ff": {
+      "value": 77.92
+    },
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "Other",
+      "description": "Indoor light illumination (1000 lux, 280 \u03bcW cm^-2)",
+      "light_intensity": {
+        "value": 0.28,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Control device under indoor light illumination (1000 lux, 280 \u03bcW cm^-2)",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 98,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 80,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 54,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 54,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 90,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 30,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 68,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 68,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 30,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.4DMA0.2FA0.2MA0.2PbI3",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 29,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 15,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 61,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 73,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 59,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 17,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 68,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 65,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.22FA0.78PbI2.55Br0.45",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.22"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.78"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "2.55"
+        },
+        {
+          "abbreviation": "Br",
+          "common_name": "Bromide",
+          "molecular_formula": "Br-",
+          "coefficient": "0.45"
+        }
+      ],
+      "bandgap": null,
+      "impurities": null,
+      "additives": null
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 19.54,
+      "unit": "%"
+    },
+    "jsc": null,
+    "voc": null,
+    "ff": null,
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Mixed-halide WBG PSC control device with 3% MAPbCl3",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 42,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 97,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 45,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 79,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 91,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 40,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.22FA0.78PbI2.55Br0.45",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 57,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 45,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 30,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 85,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 82,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 82,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 27,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  },
+  {
+    "perovskite_composition": {
+      "formula": "Cs0.22FA0.78PbI2.55Br0.45",
+      "sample_type": "Polycrystalline film",
+      "dimensionality": "3D",
+      "a_ions": [
+        {
+          "abbreviation": "Cs",
+          "common_name": "Cesium",
+          "molecular_formula": "Cs+",
+          "coefficient": "0.22"
+        },
+        {
+          "abbreviation": "FA",
+          "common_name": "Formamidinium",
+          "molecular_formula": "CH6N2+",
+          "coefficient": "0.78"
+        }
+      ],
+      "b_ions": [
+        {
+          "abbreviation": "Pb",
+          "common_name": "Lead",
+          "molecular_formula": "Pb2+",
+          "coefficient": "1"
+        }
+      ],
+      "x_ions": [
+        {
+          "abbreviation": "I",
+          "common_name": "Iodide",
+          "molecular_formula": "I-",
+          "coefficient": "2.55"
+        },
+        {
+          "abbreviation": "Br",
+          "common_name": "Bromide",
+          "molecular_formula": "Br-",
+          "coefficient": "0.45"
+        }
+      ],
+      "bandgap": null,
+      "impurities": null,
+      "additives": {
+        "abbreviation": "PDAI2",
+        "concentration": null
+      }
+    },
+    "device_architecture": "pin",
+    "pce": {
+      "value": 20.84,
+      "unit": "%"
+    },
+    "jsc": null,
+    "voc": null,
+    "ff": null,
+    "number_devices": null,
+    "averaged_quantities": null,
+    "active_area": null,
+    "light_source": {
+      "type": "AM 1.5G",
+      "description": null,
+      "light_intensity": {
+        "value": 100.0,
+        "unit": "mW cm^-2"
+      },
+      "lamp": null
+    },
+    "encapsulated": null,
+    "additional_notes": "Mixed-halide WBG PSC with PPCI film and 3% MAPbCl3",
+    "stability": null,
+    "layers": [
+      {
+        "name": "FTO",
+        "thickness": null,
+        "functionality": "Substrate",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 13,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 51,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "NiOx",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 38,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "MeO-2PACz",
+        "thickness": null,
+        "functionality": "Hole-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 86,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Cs0.22FA0.78PbI2.55Br0.45",
+        "thickness": null,
+        "functionality": "Absorber",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 50,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "PCBM w/ PDAI2",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 34,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 30,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": "n-type doping"
+      },
+      {
+        "name": "BCP",
+        "thickness": null,
+        "functionality": "Electron-transport",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 73,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 44,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      },
+      {
+        "name": "Ag",
+        "thickness": null,
+        "functionality": "Contact",
+        "deposition": [
+          {
+            "solution": {
+              "temperature": {
+                "value": 37,
+                "unit": "K"
+              }
+            }
+          },
+          {
+            "solution": {
+              "temperature": {
+                "value": 55,
+                "unit": "K"
+              }
+            }
+          }
+        ],
+        "additional_treatment": null
+      }
+    ]
+  }
+]

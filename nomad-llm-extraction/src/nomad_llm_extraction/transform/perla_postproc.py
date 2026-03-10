@@ -4,11 +4,12 @@ from copy import deepcopy
 
 import jsonref
 from benedict import benedict
+from nomad.units import ureg
 from perovskite_solar_cell_database.llm_extraction_schema import (
     LLMExtractedPerovskiteSolarCell,
 )
 
-from nomad_llm_extraction.utils import get_path_b2, update_archive_b2
+from nomad_llm_extraction.transform.json_transformer import get_paths, update_archive
 
 KEY_MAPPING = {
     'bandgap': 'band_gap',
@@ -65,28 +66,20 @@ def remove_uv(jbobj, path, func_args):
     return jbobj
 
 
-def convert_unit(jbobj, path, unit):
-    # print(j_path)
-    if jbobj[path] is None:
-        return jbobj
-    items = jbobj[path]
-    if isinstance(items, list):
-        items = [i['value'] for i in items]
-    else:
-        items = items['value']
-    jbobj[path] = items
-    return jbobj
+def convert(value, from_unit, to_unit):
+    quantity = ureg.Quantity(value, from_unit)
+    converted_quantity = quantity.to(to_unit)
+    return {'value': converted_quantity.magnitude, 'unit': to_unit}
 
 
 def convert_unit2(jbobj, path, unit):
-    # print(j_path)
     if jbobj[path] is None:
         return jbobj
     items = jbobj[path]
     if isinstance(items, list):
-        items = [i for i in items]
+        items = [convert(i['value'], i['unit'], unit) for i in items]
     else:
-        items = items
+        items = convert(items['value'], items['unit'], unit)
     jbobj[path] = items
     return jbobj
 
@@ -126,7 +119,7 @@ def get_layer_order(layers):
     if not layers or not isinstance(layers, list):
         return None
     # Filter layers that have a name and join them
-    names = [l['name'] for l in layers if l.get('name')]
+    names = [layer['name'] for layer in layers if layer.get('name')]
     return ','.join(names)
 
 
@@ -142,12 +135,27 @@ def remove_none(jbobj, path, func_args):
     return jbobj
 
 
+def update_unit_schema(jsobj, path, unit):
+    v_schema = deepcopy(jsobj[path])
+    del v_schema['unit']
+    jsobj[path] = {
+        'properties': {
+            'value': v_schema.copy(),
+            'unit': {'type': 'string', 'enum': [unit]},
+        }
+    }
+    for i in ['title', 'description']:
+        if i in v_schema:
+            jsobj[path][i] = v_schema[i]
+    return jsobj
+
+
 perov_nomad_jschema = LLMExtractedPerovskiteSolarCell.m_def.m_to_json_schema()
 resolved_schema = jsonref.replace_refs(perov_nomad_jschema, jsonschema=True)
 perov_jschema = json.load(open('llm_extraction_schema.json'))
 perov_resolved_schema = jsonref.replace_refs(perov_jschema, jsonschema=True)
 archive = json.load(
-    open('temp/extractions/claude-sonnet-4-20250514/10.1002--aenm.202506634.json')
+    open('test_data/10.1002--aenm.202506634.json')
 )['cells']
 
 proc_pipeline = {
@@ -163,23 +171,21 @@ proc_pipeline = {
 updated_archive = [benedict(deepcopy(i)) for i in archive]
 for i, (proc, (cond, get_func_args, func_apply)) in enumerate(proc_pipeline.items()):
     print(proc)
-    paths = get_path_b2(resolved_schema, '', cond, get_func_args)
-    updated_archive = update_archive_b2(deepcopy(updated_archive), paths, func_apply)
+    paths = get_paths(resolved_schema, '', cond, get_func_args)
+    updated_archive = update_archive(deepcopy(updated_archive), paths, func_apply)
 
-perov_paths = get_path_b2(perov_resolved_schema, '', None, None)
-paths = get_path_b2(resolved_schema, '', None, None)
+perov_paths = get_paths(perov_resolved_schema, '', None, None)
+paths = get_paths(resolved_schema, '', None, None)
 paths_c = [j[:-3] if j[-3:] == '[n]' else j for j in paths]
 del_paths = {}
 for i in perov_paths:
     if i not in paths_c:
         del_paths[i] = perov_paths[i]
 
-updated_archive_del_perov = update_archive_b2(
-    deepcopy(updated_archive), del_paths, delete
-)
+updated_archive_del_perov = update_archive(deepcopy(updated_archive), del_paths, delete)
 
 json.dump(
     updated_archive_del_perov[0],
-    open('10.1002--aenm.202506634_updated.archive.json', 'w'),
+    open('test_data/10.1002--aenm.202506634_updated.archive.json', 'w'),
     indent=2,
 )
