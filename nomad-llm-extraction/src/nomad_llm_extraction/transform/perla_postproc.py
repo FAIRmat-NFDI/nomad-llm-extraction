@@ -9,7 +9,11 @@ from perovskite_solar_cell_database.llm_extraction_schema import (
     LLMExtractedPerovskiteSolarCell,
 )
 
-from nomad_llm_extraction.transform.json_transformer import get_paths, update_archive
+from nomad_llm_extraction.transform.json_transformer import (
+    get_paths,
+    update_archive,
+    update_archive2,
+)
 
 KEY_MAPPING = {
     'bandgap': 'band_gap',
@@ -35,8 +39,22 @@ def unit_args(section, state):
     return state, section['unit']
 
 
-def unit_cond2(section, state):
-    return 'unit' in section and section['unit'] == 'mole / second'
+def convert(value, from_unit, to_unit):
+    quantity = ureg.Quantity(value, from_unit)
+    converted_quantity = quantity.to(to_unit)
+    return {'value': converted_quantity.magnitude, 'unit': to_unit}
+
+
+def convert_unit2(jbobj, path, unit):
+    if jbobj[path] is None:
+        return jbobj
+    items = jbobj[path]
+    if isinstance(items, list):
+        items = [convert(i['value'], i['unit'], unit) for i in items]
+    else:
+        items = convert(items['value'], items['unit'], unit)
+    jbobj[path] = items
+    return jbobj
 
 
 def cond_re(section, state):
@@ -63,24 +81,6 @@ def remove_uv(jbobj, path, func_args):
         ]
     elif isinstance(jbobj[path], dict) and 'value' in jbobj[path]:
         jbobj[path] = jbobj[path]['value']
-    return jbobj
-
-
-def convert(value, from_unit, to_unit):
-    quantity = ureg.Quantity(value, from_unit)
-    converted_quantity = quantity.to(to_unit)
-    return {'value': converted_quantity.magnitude, 'unit': to_unit}
-
-
-def convert_unit2(jbobj, path, unit):
-    if jbobj[path] is None:
-        return jbobj
-    items = jbobj[path]
-    if isinstance(items, list):
-        items = [convert(i['value'], i['unit'], unit) for i in items]
-    else:
-        items = convert(items['value'], items['unit'], unit)
-    jbobj[path] = items
     return jbobj
 
 
@@ -154,9 +154,7 @@ perov_nomad_jschema = LLMExtractedPerovskiteSolarCell.m_def.m_to_json_schema()
 resolved_schema = jsonref.replace_refs(perov_nomad_jschema, jsonschema=True)
 perov_jschema = json.load(open('llm_extraction_schema.json'))
 perov_resolved_schema = jsonref.replace_refs(perov_jschema, jsonschema=True)
-archive = json.load(
-    open('test_data/10.1002--aenm.202506634.json')
-)['cells']
+archive = json.load(open('test_data/10.1002--aenm.202506634.json'))['cells']
 
 proc_pipeline = {
     'rename': (cond_re, re_args, rename),
@@ -172,7 +170,7 @@ updated_archive = [benedict(deepcopy(i)) for i in archive]
 for i, (proc, (cond, get_func_args, func_apply)) in enumerate(proc_pipeline.items()):
     print(proc)
     paths = get_paths(resolved_schema, '', cond, get_func_args)
-    updated_archive = update_archive(deepcopy(updated_archive), paths, func_apply)
+    updated_archive = update_archive2(deepcopy(updated_archive), paths, func_apply)
 
 perov_paths = get_paths(perov_resolved_schema, '', None, None)
 paths = get_paths(resolved_schema, '', None, None)
@@ -186,6 +184,6 @@ updated_archive_del_perov = update_archive(deepcopy(updated_archive), del_paths,
 
 json.dump(
     updated_archive_del_perov[0],
-    open('test_data/10.1002--aenm.202506634_updated.archive.json', 'w'),
+    open('test_data/10.1002--aenm.202506634_updated2.archive.json', 'w'),
     indent=2,
 )

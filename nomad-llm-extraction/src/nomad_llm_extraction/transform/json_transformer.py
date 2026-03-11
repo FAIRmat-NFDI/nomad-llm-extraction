@@ -1,3 +1,5 @@
+import re
+
 from copy import deepcopy
 
 
@@ -168,3 +170,60 @@ def update_archive(jbobj, paths, func_apply=None):
                 else:
                     jbobj = func_apply(jbobj, sub_paths[0], func_args)
     return jbobj
+
+
+def get_array_paths(jbobj, path):
+    re_pattern = re.escape(path)
+    re_pattern = '^' + re_pattern.replace(r'\[n\]', r'\[(\d+)\]') + '$'
+    return [
+        i for i in jbobj.keypaths(indexes=True, sort=True) if re.match(re_pattern, i)
+    ]
+
+
+def update_archive2(jbobj, paths, func_apply=None):
+    func_apply = default_func_apply if func_apply is None else func_apply
+
+    if jbobj is None:
+        return None
+    if isinstance(jbobj, list):
+        return [update_archive2(i, paths, func_apply) for i in jbobj]
+    for path, (state, func_args, stype) in paths.items():
+        if stype == 'property' and check_path(jbobj, path):
+            jbobj = func_apply(jbobj, path, func_args)
+        elif stype == 'array':
+            if path[-3:] == '[n]':
+                path = path[:-3]
+            array_paths = get_array_paths(jbobj, path)
+            for array_path in array_paths:
+                if check_path(jbobj, array_path):
+                    jbobj = func_apply(jbobj, array_path, func_args)
+    return jbobj
+
+
+def merge_all_of(schema):
+    """
+    Recursively merges 'allOf' lists into a single dictionary.
+    """
+    if not isinstance(schema, dict):
+        return schema
+
+    if 'allOf' in schema:
+        all_of_list = schema.pop('allOf')
+        for subschema in all_of_list:
+            # Recursively merge the subschema first
+            merged_sub = merge_all_of(subschema)
+            # Update the base schema with subschema properties
+            for key, value in merged_sub.items():
+                if key == 'properties':
+                    schema['properties'] = {**schema.get('properties', {}), **value}
+                else:
+                    schema[key] = value
+
+    if 'properties' in schema:
+        for k, v in schema['properties'].items():
+            schema['properties'][k] = merge_all_of(v)
+
+    if 'items' in schema:
+        schema['items'] = merge_all_of(schema['items'])
+
+    return schema
