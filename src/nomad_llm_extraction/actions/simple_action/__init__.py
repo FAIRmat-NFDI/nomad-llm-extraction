@@ -8,10 +8,12 @@ with workflow.unsafe.imports_passed_through():
 
 class SimpleActionEntryPoint(ActionEntryPoint):
     task_queue: str = Field(
-        default=TaskQueue.CPU, description='Determines the task queue for this action'
+        default=TaskQueue.CPU, 
+        description='Determines the task queue for this action'
     )
     gemini_api_key: str = Field(
-        default=None, description='API key for Gemini API.'
+        default=None, 
+        description='API key for Gemini API.'
     )
 
     def load(self):
@@ -20,6 +22,7 @@ class SimpleActionEntryPoint(ActionEntryPoint):
         from nomad_llm_extraction.actions.simple_action.activities import (
             extract_simple_data_activity,
             read_pdf_activity,
+            save_extracted_data_activity,
         )
         from nomad_llm_extraction.actions.simple_action.workflows import (
             SimpleExtractionWorkflow,
@@ -28,7 +31,9 @@ class SimpleActionEntryPoint(ActionEntryPoint):
         return Action(
             task_queue=self.task_queue,
             workflow=SimpleExtractionWorkflow,
-            activities=[read_pdf_activity, extract_simple_data_activity],
+            activities=[read_pdf_activity, 
+                        extract_simple_data_activity, 
+                        save_extracted_data_activity],
         )
 
 

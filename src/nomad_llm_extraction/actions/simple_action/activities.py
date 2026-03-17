@@ -6,6 +6,7 @@ import google.generativeai as genai
 from temporalio import activity
 from nomad.config import config
 from pathlib import Path
+import json
 
 def _load_class_from_path(class_path: str):
     module_path, class_name = class_path.rsplit('.', 1)
@@ -89,3 +90,42 @@ async def extract_simple_data_activity(text: str, config_dict: dict) -> str:
     )
     
     return extracted_data.model_dump_json()
+
+@activity.defn
+async def save_extracted_data_activity(upload_id: str, extracted_json: str) -> str:
+    activity.logger.info("Saving extracted data to NOMAD archive format...")
+    
+    prefix = upload_id[:2] 
+    staging_dir = config.fs.staging
+    current_file_path = Path(__file__).resolve()
+    upload_folder_path = None
+    
+    for parent_dir in current_file_path.parents:
+        potential_staging = parent_dir / staging_dir / prefix / upload_id
+        if potential_staging.exists():
+            upload_folder_path = str(potential_staging)
+            break
+            
+    if not upload_folder_path:
+        upload_folder_path = f"/Users/uday/projects/nomad-distro-dev/{staging_dir}/{prefix}/{upload_id}"
+        
+    raw_folder = os.path.join(upload_folder_path, 'raw')
+    
+    data = json.loads(extracted_json)
+    
+    archive_data = {
+        "data": {
+            # This links it to your schema_package.py!
+            "m_def": "nomad_llm_extraction.schema_packages.schema_package.BatteryExtraction",
+            **data
+        }
+    }
+    
+    file_name = "llm_results.archive.json"
+    file_path = os.path.join(raw_folder, file_name)
+    
+    with open(file_path, 'w') as f:
+        json.dump(archive_data, f, indent=4)
+        
+    activity.logger.info(f"Saved archive file to {file_path}")
+    return file_path
