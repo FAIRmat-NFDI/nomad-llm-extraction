@@ -1,15 +1,6 @@
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
 
 class SimpleWorkflowInput(BaseModel):
-    """Input model for the simple workflow"""
-
-    upload_id: str = Field(
-        ...,
-        description='Unique identifier for the upload associated with the workflow.',
-    )
-    user_id: str = Field(
-        ..., description='Unique identifier for the user who initiated the workflow.'
-    )
-
-    name: str = Field(..., description='The name to greet.')
+    """Input model for the simple Temporal workflow"""
+    upload_id: str
+    user_id: str
