@@ -1,0 +1,87 @@
+import json
+import re
+from copy import deepcopy
+
+import jsonref
+from benedict import benedict
+
+
+def check_path(b_data, path):
+    return path in b_data
+
+
+def clean_path(p):
+    return '.'.join([i for i in p.split('.') if i != ''])
+
+
+def delete_section(b_data, path, func_args=None):
+    if check_path(b_data, path):
+        del b_data[path]
+    return b_data
+
+
+def deref(b_data):
+    """
+    Convert a benedict object or a dictionary with references to a regular dictionary by serializing and deserializing it.
+    """
+    return json.loads(json.dumps(b_data))
+
+
+def get_b_data(data):
+
+    if isinstance(data, list):
+        return [benedict(deepcopy(i)) for i in data]
+    else:
+        return benedict(deepcopy(data))
+
+
+def get_array_regex(path):
+    """
+    Converts a path with array indexes given as [*]/[n] to a regex pattern that matches and captures paths with any index.
+    """
+    re_pattern = re.escape(path)
+    re_pattern = (
+        '^' + re.sub(r'\\\[((n|\\\*)\d*?)\\\]', r'\[(\\d+)\]', re_pattern) + '$'
+    )
+    return re_pattern
+
+
+def merge_all_of(schema):
+    """
+    Recursively merges 'allOf' lists into a single dictionary.
+    """
+    if not isinstance(schema, dict):
+        return schema
+
+    if 'allOf' in schema:
+        all_of_list = schema.pop('allOf')
+        for subschema in all_of_list:
+            # Recursively merge the subschema first
+            merged_sub = merge_all_of(subschema)
+            # Update the base schema with subschema properties
+            for key, value in merged_sub.items():
+                if key == 'properties':
+                    schema['properties'] = {**schema.get('properties', {}), **value}
+                else:
+                    schema[key] = value
+
+    if 'properties' in schema:
+        for k, v in schema['properties'].items():
+            schema['properties'][k] = merge_all_of(v)
+
+    if 'items' in schema:
+        schema['items'] = merge_all_of(schema['items'])
+
+    return schema
+
+
+def resolve_schema(schema, remove_defs=False, resolve_allOf=False):
+    """
+    Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
+    """
+    schema = jsonref.replace_refs(schema, jsonschema=True)
+    if remove_defs and '$defs' in schema:
+        del schema['$defs']
+    if resolve_allOf:
+        schema = merge_all_of(deepcopy(schema))
+    return deref(schema)

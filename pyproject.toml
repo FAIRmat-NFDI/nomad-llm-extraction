@@ -25,12 +25,15 @@ maintainers = [
 ]
 license = { file = "LICENSE" }
 dependencies = [
+    "jsonref>=1.1.0",
     "nomad-lab>=1.4.1",
+    "jsonschema>=4.26.0",
     "pydantic",
     "temporalio",
     "PyPDF2",
     "instructor",
-    "google-generativeai"
+    "google-generativeai",
+    "python-benedict>=0.35.0",
 ]
 
 [project.urls]
@@ -52,7 +55,7 @@ dev = [
 extra-index-url = [
   "https://gitlab.mpcdf.mpg.de/api/v4/projects/2187/packages/pypi/simple",
 ]
-    
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -83,28 +86,39 @@ exclude = [
 line-length = 88
 indent-width = 4
 
-
 [tool.ruff.lint]
 select = [
-    # pycodestyle
-    "E",
-    # Pyflakes
-    "F",
-    # pyupgrade
-    "UP",
-    # isort
-    "I",
-    # pylint
-    "PL",
+  "E", # pycodestyle
+  "F", # pyflakes
+  "F401", # remove unused import
+  "FAST", # FastAPI
+  "I001", # sort imports
+  "PL", # pylint
+  "UP", # pyupgrade
+  "W", # pycodestyle
 ]
-
 ignore = [
-    "F403", # 'from module import *' used; unable to detect undefined names
-    "PLC0415", # `import` should be at the top-level of a file
-    "E501", # line too long
+  "F403", # 'from module import *' used; unable to detect undefined names
+  "PLC0415", # `import` should be at the top-level of a file
+  "E402", # Module level import not at top of file
+  "E501", # Line too long ({width} > {limit} characters)
+  "E701", # Multiple statements on one line (colon)
+  "E731", # Do not assign a lambda expression, use a def
+  "PLR0904", # too-many-public-methods
+  "PLR0911", # Too many return statements
+  "PLR0912", # Too many branches
+  "PLR0913", # Too many arguments in function definition
+  "PLR0915", # Too many statements
+  "PLR0917", # too-many-positional-arguments
+  "PLR1714", # consider-using-in
+  "PLR2004", # Magic value used instead of constant
+  "PLR5501", # else-if-used
+  "PLW0603", # Using the global statement
+  "PLW2901", # redefined-loop-name
+  "PLC0415", # import-outside-top-level
 ]
-
 fixable = ["ALL"]
+isort.split-on-trailing-comma = false
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

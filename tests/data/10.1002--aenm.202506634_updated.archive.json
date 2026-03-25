@@ -1,0 +1,195 @@
+{
+  "perovskite_composition": {
+    "formula": "(FA0.6MA0.4)Pb(I0.6Br0.4)3",
+    "sample_type": "Polycrystalline film",
+    "dimensionality": "3D",
+    "band_gap": 1.77,
+    "ions_a_site": [
+      {
+        "abbreviation": "FA",
+        "common_name": "Formamidinium",
+        "molecular_formula": "CH6N+",
+        "coefficient": "0.6"
+      },
+      {
+        "abbreviation": "MA",
+        "common_name": "Methylammonium",
+        "molecular_formula": "CH5N+",
+        "coefficient": "0.4"
+      }
+    ],
+    "ions_b_site": [
+      {
+        "abbreviation": "Pb",
+        "common_name": "Lead",
+        "molecular_formula": "Pb2+",
+        "coefficient": "1"
+      }
+    ],
+    "ions_x_site": [
+      {
+        "abbreviation": "I",
+        "common_name": "Iodide",
+        "molecular_formula": "I-",
+        "coefficient": "0.6"
+      },
+      {
+        "abbreviation": "Br",
+        "common_name": "Bromide",
+        "molecular_formula": "Br-",
+        "coefficient": "0.4"
+      }
+    ]
+  },
+  "device_architecture": "pin",
+  "pce": 19.03,
+  "jsc": 18.2,
+  "voc": 1.244,
+  "ff": 84.02,
+  "active_area": 0.094,
+  "light_source": {
+    "type": "AM 1.5G",
+    "light_intensity": 100.0
+  },
+  "layers": [
+    {
+      "name": "Glass",
+      "functionality": "Substrate"
+    },
+    {
+      "name": "FTO",
+      "functionality": "Substrate"
+    },
+    {
+      "name": "2PACz",
+      "functionality": "Hole-transport",
+      "deposition": [
+        {
+          "method": "Spin-coating",
+          "atmosphere": "Ar",
+          "temperature": 100.0,
+          "duration": 600.0,
+          "solution": {
+            "solutes": [
+              {
+                "name": "2PACz",
+                "concentration": 0.001,
+                "concentration_unit": "mol/L"
+              }
+            ],
+            "solvents": [
+              {
+                "name": "IPA"
+              }
+            ]
+          },
+          "additional_parameters": {
+            "spin_speed": "3000 rpm",
+            "spin_time": "30 s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "(FA0.6MA0.4)Pb(I0.6Br0.4)3",
+      "functionality": "Absorber",
+      "deposition": [
+        {
+          "method": "Spin-coating",
+          "atmosphere": "Ar",
+          "antisolvent": "CB",
+          "solution": {
+            "solutes": [
+              {
+                "name": "PbI2",
+                "concentration": 1.35,
+                "concentration_unit": "mol/L"
+              },
+              {
+                "name": "PbBr2",
+                "concentration": 1.35,
+                "concentration_unit": "mol/L"
+              },
+              {
+                "name": "FAI",
+                "concentration": 1.35,
+                "concentration_unit": "mol/L"
+              },
+              {
+                "name": "MABr",
+                "concentration": 1.35,
+                "concentration_unit": "mol/L"
+              }
+            ],
+            "solvents": [
+              {
+                "name": "DMF",
+                "volume_fraction": 0.8
+              },
+              {
+                "name": "DMSO",
+                "volume_fraction": 0.2
+              }
+            ]
+          },
+          "additional_parameters": {
+            "spin_speed": "6000 rpm",
+            "spin_time": "30 s"
+          }
+        },
+        {
+          "method": "Thermal-annealing",
+          "atmosphere": "Ar",
+          "temperature": 100.0,
+          "duration": 1200.0
+        }
+      ]
+    },
+    {
+      "name": "LiF",
+      "thickness": 1.0,
+      "functionality": "Other",
+      "deposition": [
+        {
+          "method": "Evaporation",
+          "atmosphere": "Vacuum"
+        }
+      ]
+    },
+    {
+      "name": "C60",
+      "thickness": 20.0,
+      "functionality": "Electron-transport",
+      "deposition": [
+        {
+          "method": "Evaporation",
+          "atmosphere": "Vacuum"
+        }
+      ]
+    },
+    {
+      "name": "SnO2",
+      "thickness": 25.0,
+      "functionality": "Electron-transport",
+      "deposition": [
+        {
+          "method": "ALD",
+          "atmosphere": "Other",
+          "temperature": 90.0
+        }
+      ]
+    },
+    {
+      "name": "Cu",
+      "thickness": 100.0,
+      "functionality": "Contact",
+      "deposition": [
+        {
+          "method": "Evaporation",
+          "atmosphere": "Vacuum"
+        }
+      ]
+    }
+  ],
+  "layer_order": "Glass,FTO,2PACz,(FA0.6MA0.4)Pb(I0.6Br0.4)3,LiF,C60,SnO2,Cu"
+}

@@ -1,0 +1,1378 @@
+{
+    "$defs": {
+        "ActiveArea": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "exclusiveMinimum": 0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "cm^2",
+                                "mm^2"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "ActiveArea",
+            "type": "object"
+        },
+        "Bandgap": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "maximum": 4.0,
+                            "minimum": 0.5,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "const": "eV",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Bandgap",
+            "type": "object"
+        },
+        "Concentration": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "mol/L",
+                                "mmol/L",
+                                "g/L",
+                                "mg/L",
+                                "mg/mL",
+                                "wt%",
+                                "vol%",
+                                "M"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Concentration",
+            "type": "object"
+        },
+        "FF": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "maximum": 100,
+                            "minimum": 0.0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Mostly the Fill factor is given as a percentage (%). In case is not make sure to convert it from ratio to percentage.",
+                    "title": "Value"
+                }
+            },
+            "title": "FF",
+            "type": "object"
+        },
+        "Humidity": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "maximum": 100,
+                            "minimum": 0.0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "const": "%",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Humidity",
+            "type": "object"
+        },
+        "Impurity": {
+            "properties": {
+                "abbreviation": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The abbreviation used for the additive or impurity.",
+                    "title": "Abbreviation"
+                },
+                "concentration": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Concentration"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The concentration of the additive or impurity. (unit: cm^-3)"
+                }
+            },
+            "title": "Impurity",
+            "type": "object"
+        },
+        "Ion": {
+            "properties": {
+                "abbreviation": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The abbreviation used for the ion when writing the perovskite composition such as: 'Cs', 'MA', 'FA', 'PEA'",
+                    "title": "Abbreviation"
+                },
+                "common_name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The common name of the ion such as 'Cesium', 'Methylammonium', 'Formamidinium', 'Phenylethylammonium'",
+                    "title": "Common Name"
+                },
+                "molecular_formula": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The molecular formula of the ion such as 'Cs+', 'CH5N+', 'CH6N+', 'C10H15N2+'",
+                    "title": "Molecular Formula"
+                },
+                "coefficient": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The stoichiometric coefficient of the ion such as \u201c0.75\u201d, or \u201c1-x\u201d. You can break it down from the perovskite formula. For example: FA0.85MA0.15PbI2.55Br0.45 will fill 0.85 coefficient for FA, 0.15 for MA, 1 for Pb, and 2 for I.",
+                    "title": "Coefficient"
+                }
+            },
+            "title": "Ion",
+            "type": "object"
+        },
+        "JSC": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "mA cm^-2",
+                                "A m^-2",
+                                "A cm^-2",
+                                "mA m^-2",
+                                "uA cm^-2"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "JSC",
+            "type": "object"
+        },
+        "Layer": {
+            "properties": {
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Name of the material in the layer. Use standard abbreviations if possible. If the layer has additional modificatons done to it, include them here. For example, CH3NH3PbI3 w/ PEG or CH3NH3PbI3 w/ PCBM.",
+                    "title": "Name"
+                },
+                "thickness": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Thickness"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Total thickness of the deposited perovskite layer."
+                },
+                "functionality": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "Hole-transport",
+                                "Electron-transport",
+                                "Contact",
+                                "Absorber",
+                                "Other",
+                                "Substrate"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "\n        The functionality of the perovskite solar cell layer should be one of the following:\n        - Hole-transport: Spiro-MeOTAD, PEDOT, PTAA, NiO\n        - Electron-transport: TiO2, SnO2, ZnO, PCBM\n        - Contact: Au, Ag, Al, MoO3, interface layers\n        - Absorber: Perovskite active layers (MAPbI3, CsPbI3)\n        - Substrate: FTO, ITO, glass, flexible polymers\n        - Other: Antireflective, buffer layers, unclassified\n    ",
+                    "title": "Functionality"
+                },
+                "deposition": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/ProcessingStep"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "List of processing steps in order of execution. Only report conditions that have reported in the paper.",
+                    "title": "Deposition"
+                },
+                "additional_treatment": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "\n        Description of modifications applied to this layer beyond its basic composition, including:\n\n        - Self-assembled monolayers (SAMs)\n        - Surface passivation treatments\n        - Interface engineering (e.g., Lewis base/acid treatments)\n        - Additives or dopants\n        - Post-deposition treatments\n\n        Use established terminology: \"SAM\" for self-assembled molecular layers, \"surface passivation\", \"doping\" where applicable.\n    ",
+                    "title": "Additional Treatment"
+                }
+            },
+            "title": "Layer",
+            "type": "object"
+        },
+        "LightIntensity": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "minimum": 0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "mW cm^-2",
+                                "W m^-2",
+                                "mW m^-2",
+                                "sun",
+                                "lux"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "LightIntensity",
+            "type": "object"
+        },
+        "LightSource": {
+            "properties": {
+                "type": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "AM 1.5G",
+                                "AM 1.5D",
+                                "AM 0",
+                                "Monochromatic",
+                                "White LED",
+                                "Other",
+                                "Outdoor"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Type"
+                },
+                "description": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Additional details about the light source. This is very important.",
+                    "title": "Description"
+                },
+                "light_intensity": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/LightIntensity"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "lamp": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Type of lamp used to generate the spectrum",
+                    "title": "Lamp"
+                }
+            },
+            "title": "LightSource",
+            "type": "object"
+        },
+        "PCE": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "maximum": 40,
+                            "minimum": 0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "const": "%",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "PCE",
+            "type": "object"
+        },
+        "PerovskiteComposition": {
+            "properties": {
+                "formula": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The perovskite composition according to IUPAC recommendations, where standard abbreviations are used for all ions.",
+                    "title": "Formula"
+                },
+                "sample_type": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "Polycrystalline film",
+                                "Single crystal",
+                                "Quantum dots",
+                                "Nano rods",
+                                "Colloidal solution",
+                                "Amorphous",
+                                "Other"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Type of the perovskite (e.g., Polycrystalline film, Single crystal, etc.).",
+                    "title": "Sample Type"
+                },
+                "dimensionality": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "0D",
+                                "1D",
+                                "2D",
+                                "3D",
+                                "2D/3D"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Dimensionality"
+                },
+                "a_ions": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/Ion"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "A-site ions. Only include information that is described in the paper.",
+                    "title": "A Ions"
+                },
+                "b_ions": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/Ion"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "B-site ions. Only include information that is described in the paper.",
+                    "title": "B Ions"
+                },
+                "x_ions": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/Ion"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "X-site ions. Only include information that is described in the paper.",
+                    "title": "X Ions"
+                },
+                "bandgap": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Bandgap"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Bandgap of the perovskite material being used in eV. You can also estimate the bandgap based on your knowledge if it's not mentioned in the paper."
+                },
+                "impurities": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Impurity"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "List any impurities added to the perovskite layer."
+                },
+                "additives": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Impurity"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "List any additives added to the perovskite layer."
+                }
+            },
+            "title": "PerovskiteComposition",
+            "type": "object"
+        },
+        "ProcessingStep": {
+            "properties": {
+                "step_name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Step Name"
+                },
+                "method": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "This is the method for the processing of steps in the design of the cells. Some examples are: Spin-coating, Drop-infiltration, Evaporation, Co-evaporation, Doctor blading, Spray coating, Slot-die coating, Ultrasonic spray, Dropcasting, Inkjet printing, Electrospraying, Thermal-annealing, Antisolvent-quenching, Gas quenching.",
+                    "title": "Method"
+                },
+                "atmosphere": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "Ambient air",
+                                "Dry air",
+                                "Air",
+                                "N2",
+                                "Ar",
+                                "He",
+                                "H2",
+                                "Vacuum",
+                                "Other"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "title": "Atmosphere"
+                },
+                "temperature": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Temperature"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "duration": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Time"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "antisolvent": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Antisolvent"
+                },
+                "solution": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ReactionSolution"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "additional_parameters": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": true,
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Any additional parameters specific to this processing step",
+                    "title": "Additional Parameters"
+                }
+            },
+            "required": [
+                "atmosphere"
+            ],
+            "title": "ProcessingStep",
+            "type": "object"
+        },
+        "ReactionSolution": {
+            "properties": {
+                "compounds": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Compounds"
+                },
+                "solutes": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/Solute"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Solutes"
+                },
+                "volume": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Volume"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "This volume is the volume of solution used in the experiment, e.g. the solvent volume that is spin-coated rather than the volume of the stock solution."
+                },
+                "temperature": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Temperature"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "solvents": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/Solvent"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Solvents"
+                }
+            },
+            "title": "ReactionSolution",
+            "type": "object"
+        },
+        "Solute": {
+            "properties": {
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "title": "Name"
+                },
+                "concentration": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Concentration"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "concentration"
+            ],
+            "title": "Solute",
+            "type": "object"
+        },
+        "Solvent": {
+            "properties": {
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Name"
+                },
+                "volume_fraction": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The volume fraction of the solvent with respect to the other solvents in the solution",
+                    "title": "Volume Fraction"
+                }
+            },
+            "title": "Solvent",
+            "type": "object"
+        },
+        "Stability": {
+            "properties": {
+                "time": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Time"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "light_intensity": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/LightIntensity"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "humidity": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Humidity"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "temperature": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Temperature"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null
+                },
+                "PCE_T80": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Time"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The time after which the cell performance has degraded by 20% with respect to the initial performance."
+                },
+                "PCE_at_the_start_of_the_experiment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/PCE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "PCE_after_1000_hours": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/PCE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "PCE_at_the_end_of_experiment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/PCE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "potential_bias": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "Open circuit",
+                                "MPPT",
+                                "Constant potential",
+                                "Constant current",
+                                "Constant resistance"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "title": "Potential Bias"
+                }
+            },
+            "required": [
+                "PCE_at_the_start_of_the_experiment",
+                "PCE_after_1000_hours",
+                "PCE_at_the_end_of_experiment",
+                "potential_bias"
+            ],
+            "title": "Stability",
+            "type": "object"
+        },
+        "Temperature": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "\u00b0C",
+                                "K"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Temperature",
+            "type": "object"
+        },
+        "Thickness": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "nm",
+                                "\u00b5m"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Thickness",
+            "type": "object"
+        },
+        "Time": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "s",
+                                "min",
+                                "h",
+                                "days",
+                                "weeks",
+                                "months",
+                                "years"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Time",
+            "type": "object"
+        },
+        "VOC": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "maximum": 1500,
+                            "minimum": 0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "V",
+                                "mV"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "VOC",
+            "type": "object"
+        },
+        "Volume": {
+            "properties": {
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Value"
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "L",
+                                "mL",
+                                "\u03bcL"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Unit"
+                }
+            },
+            "title": "Volume",
+            "type": "object"
+        }
+    },
+    "properties": {
+        "perovskite_composition": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/PerovskiteComposition"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "device_architecture": {
+            "anyOf": [
+                {
+                    "enum": [
+                        "pin",
+                        "nip",
+                        "Back contacted",
+                        "Front contacted",
+                        "Other"
+                    ],
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "Device Architecture"
+        },
+        "pce": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/PCE"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "jsc": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/JSC"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "voc": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/VOC"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "ff": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/FF"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "number_devices": {
+            "anyOf": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Over how many devices the performance metrics have been averaged.",
+            "title": "Number Devices"
+        },
+        "averaged_quantities": {
+            "anyOf": [
+                {
+                    "type": "boolean"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "True if the reported performance metrics are reported based on an average over multiple devices. If there are additional statistics that have been reported, extract them into `additional_notes`.",
+            "title": "Averaged Quantities"
+        },
+        "active_area": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/ActiveArea"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Reported active area of the solar cell."
+        },
+        "light_source": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/LightSource"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null
+        },
+        "encapsulated": {
+            "anyOf": [
+                {
+                    "type": "boolean"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "True if the cell has been encapsulated.",
+            "title": "Encapsulated"
+        },
+        "additional_notes": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Any additional comments or observations",
+            "title": "Additional Notes"
+        },
+        "stability": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/Stability"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Include this field only if stability tests have been performed. Only include conditions that have been explicitly reported in the paper. If there are additional statistics, report them in `additional_notes`."
+        },
+        "layers": {
+            "anyOf": [
+                {
+                    "items": {
+                        "$ref": "#/$defs/Layer"
+                    },
+                    "type": "array"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Include all layers in the cell stack. Only report conditions for those where deposition conditions have been reported in the paper. Include the ETL, HTL, Contact, Absorber, and Substrate layers.",
+            "title": "Layers"
+        }
+    },
+    "title": "PerovskiteSolarCell",
+    "type": "object"
+}
