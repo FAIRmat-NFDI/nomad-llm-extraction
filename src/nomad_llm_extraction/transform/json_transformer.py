@@ -251,6 +251,7 @@ class ProcessingPipeline:
         """
         Cleans the json by deleting the paths that are in base_schema but not in target_schema.
         """
+        clean_func = delete_section if clean_func is None else clean_func
         base_paths = get_paths(base_schema, None, None)
         target_paths = get_paths(target_schema, None, None)
         target_paths = [j[:-3] if j[-3:] == '[n]' else j for j in target_paths]
@@ -258,4 +259,4 @@ class ProcessingPipeline:
         for i in base_paths:
             if i not in target_paths:
                 del_paths[i] = base_paths[i]
-        return deref(update_data(get_b_data(data), del_paths, delete_section))
+        return deref(update_data(get_b_data(data), del_paths, clean_func))

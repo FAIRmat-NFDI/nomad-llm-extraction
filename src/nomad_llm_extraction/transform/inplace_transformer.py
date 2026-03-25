@@ -40,7 +40,12 @@ def _resolve_rule(b_data, rule, name):
 
     source_index_positions = [x for x in re.finditer(r'\[(n\d+?)\]', source_path)]
     target_index_positions = [x for x in re.finditer(r'\[(n\d+?)\]', target_path)]
-    assert len(source_index_positions) == len(target_index_positions)
+    if len(source_index_positions) != len(target_index_positions):
+        raise ValueError(
+            'Mismatch between source and target array index placeholders: '
+            f"{len(source_index_positions)} in source path '{source_path}' vs "
+            f"{len(target_index_positions)} in target path '{target_path}'."
+        )
     source_path_sections = [i.span() for i in source_index_positions]
     target_path_sections = [i.span() for i in target_index_positions]
 
@@ -102,7 +107,6 @@ def update_source_data(
     Merges the transformed json into the base archive and deletes the source paths present in the rules.
     """
     b_source_data = get_b_data(source_data)
-    b_transformed_archive = get_b_data(transformed_data)
     b_source_data.merge(transformed_data)
     if rules is not None:
         b_source_data = del_sources(b_source_data, rules)

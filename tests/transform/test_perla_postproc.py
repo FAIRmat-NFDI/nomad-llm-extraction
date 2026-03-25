@@ -5,9 +5,6 @@ from pathlib import Path
 import pytest
 from benedict import benedict
 from nomad.datamodel.metainfo.annotations import Rules
-from perovskite_solar_cell_database.llm_extraction_schema import (
-    LLMExtractedPerovskiteSolarCell,
-)
 
 from nomad_llm_extraction.transform.common_transforms import *
 from nomad_llm_extraction.transform.inplace_transformer import InplaceTransformer
@@ -20,8 +17,8 @@ from nomad_llm_extraction.transform.utils import resolve_schema
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_PATH = ROOT / 'data' / '10.1002--aenm.202506634.json'
 UPDATED_ARCHIVE_PATH = ROOT / 'data' / '10.1002--aenm.202506634_updated.archive.json'
-SCHEMA_PATH = ROOT / 'data' / 'llm_extraction_schema.json'
-
+PEROV_SCHEMA_PATH = ROOT / 'data' / 'llm_extraction_schema.json'
+NOMAD_SCHEMA_PATH = ROOT / 'data' / 'nomad_llm_extraction_schema.json'
 KEY_MAPPING = {
     'bandgap': 'band_gap',
     'PCE_at_the_start_of_the_experiment': 'PCE_at_start',
@@ -75,14 +72,13 @@ def layer_order(b_data, path, func_args):
 
 @pytest.fixture(scope='module')
 def resolved_schema():
-    return resolve_schema(
-        LLMExtractedPerovskiteSolarCell.m_def.m_to_json_schema(), remove_defs=True
-    )
+    with NOMAD_SCHEMA_PATH.open() as handle:
+        return resolve_schema(json.load(handle), remove_defs=True)
 
 
 @pytest.fixture(scope='module')
 def perov_resolved_schema():
-    with SCHEMA_PATH.open() as handle:
+    with PEROV_SCHEMA_PATH.open() as handle:
         return resolve_schema(json.load(handle))
 
 
