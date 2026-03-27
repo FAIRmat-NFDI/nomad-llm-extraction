@@ -12,7 +12,10 @@ from nomad_llm_extraction.transform.json_transformer import (
     ProcessingPipeline,
     get_paths,
 )
-from nomad_llm_extraction.transform.utils import resolve_schema
+from nomad_llm_extraction.transform.utils import (
+    clean_pydantic_jsonschema,
+    resolve_schema,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_PATH = ROOT / 'data' / '10.1002--aenm.202506634.json'
@@ -79,7 +82,7 @@ def resolved_schema():
 @pytest.fixture(scope='module')
 def perov_resolved_schema():
     with PEROV_SCHEMA_PATH.open() as handle:
-        return resolve_schema(json.load(handle))
+        return clean_pydantic_jsonschema(resolve_schema(json.load(handle)))
 
 
 @pytest.fixture(scope='module')
@@ -97,13 +100,13 @@ def expected_updated_archive():
 @pytest.fixture(scope='module')
 def processing_pipeline():
     proc_pipeline = {
-        'rename': [rename_section, rename_cond, rename_args, 'archive'],
-        'unit_conversion': [convert_unit, unit_cond, unit_args, 'archive'],
-        'split_unit_value': [split_value_unit, split_value_unit_cond, None, 'archive'],
-        'flatten_unit_value': [remove_unit_value, None, None, 'archive'],
-        'delete_sections': [delete_section, delete_cond, None, 'archive'],
-        'layer_order': [layer_order, layer_order_cond, layer_order_args, 'archive'],
-        'remove_none': [remove_none, None, None, 'archive'],
+        'rename': [rename_section, rename_cond, rename_args],
+        'unit_conversion': [convert_unit, unit_cond, unit_args],
+        'split_unit_value': [split_value_unit, split_value_unit_cond, None],
+        'flatten_unit_value': [remove_unit_value, None, None],
+        'delete_sections': [delete_section, delete_cond, None],
+        'layer_order': [layer_order, layer_order_cond, layer_order_args],
+        'remove_none': [remove_none, None, None],
     }
     return ProcessingPipeline(proc_pipeline)
 
@@ -115,9 +118,11 @@ def test_processing_pipeline_matches_expected_archive(
     processing_pipeline,
     resolved_schema,
 ):
-    updated_archive = processing_pipeline.apply(archive, resolved_schema)
+    updated_archive = processing_pipeline.apply(
+        archive, resolved_schema, proc_type='archive'
+    )
     cleaned_archive = processing_pipeline.clean(
-        updated_archive, perov_resolved_schema, resolved_schema
+        updated_archive, resolved_schema, perov_resolved_schema
     )
 
     assert cleaned_archive[0] == expected_updated_archive
@@ -125,7 +130,7 @@ def test_processing_pipeline_matches_expected_archive(
 
 def test_schema_pipeline_round_trips_unit_wrappers(resolved_schema):
     schema_pipeline = ProcessingPipeline(
-        {'add_unit_value': [update_unit_value_schema, unit_cond, unit_args, 'schema']}
+        {'add_unit_value': [update_unit_value_schema, unit_cond, unit_args]}
     )
     reverse_schema_pipeline = ProcessingPipeline(
         {
@@ -133,12 +138,11 @@ def test_schema_pipeline_round_trips_unit_wrappers(resolved_schema):
                 flatten_unit_value_schema,
                 flatten_unit_value_schema_cond,
                 None,
-                'schema',
             ]
         }
     )
 
-    updated_schema = schema_pipeline.apply(resolved_schema)
+    updated_schema = schema_pipeline.apply(resolved_schema, proc_type='schema')
     unit_paths = get_paths(resolved_schema, unit_cond, unit_args, 'path')
     benedict_schema = benedict(deepcopy(updated_schema))
 
@@ -147,7 +151,7 @@ def test_schema_pipeline_round_trips_unit_wrappers(resolved_schema):
         assert 'value' in benedict_schema[path]['properties']
         assert 'unit' in benedict_schema[path]['properties']
 
-    flattened_schema = reverse_schema_pipeline.apply(updated_schema)
+    flattened_schema = reverse_schema_pipeline.apply(updated_schema, proc_type='schema')
     flattened_benedict = benedict(deepcopy(flattened_schema))
 
     for path in unit_paths:
