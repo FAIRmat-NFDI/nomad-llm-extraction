@@ -35,7 +35,7 @@ def get_section_type(section):
     if stype == '':
         stype = (
             'object'
-            if 'allOf' in section or 'anyOf' in section or 'properties' in section
+            if any(key in section for key in ['allOf', 'anyOf', 'properties'])
             else stype
         )
         stype = 'array' if 'items' in section else stype
@@ -57,7 +57,7 @@ def update_state(state, name, p_name, stype=None, **kwargs):
     """
     n_state = deepcopy(state)
     n_state['name'] = name
-    n_state['p_name'] = p_name
+    n_state['p_name'] = p_name if p_name != '' else state['p_name']
     n_state['a_p_path'] = clean_path(f'{n_state["a_p_path"]}.{p_name}')
     n_state['p_path'] = clean_path(f'{n_state["p_path"]}.{p_name}')
     if stype == 'object':
@@ -95,9 +95,8 @@ def get_paths(
         The type can be 'property' or 'array' depending on the section, used to apply the functions in the pipeline.
     """
     # For jsonschemas from pydantic models
-    if section == {'type': None}:
+    if section == {'type': None} or section == {'type': 'null'}:
         return {}
-
     cond = default_cond if cond is None else cond
     get_func_args = default_get_func_args if get_func_args is None else get_func_args
     all_paths = {}
@@ -108,14 +107,14 @@ def get_paths(
         state = {
             k: ''
             for k in [
-                'sname',
-                'name',
-                'p_name',
-                'p_path',
-                'a_p_path',
-                'path',
-                'a_path',
-                'type',
+                'sname',  # the full path of the current section with section names in the schema
+                'name',  # the name of the current section
+                'p_name',  # the name of the parent section
+                'p_path',  # the path of the parent section in the schema
+                'a_p_path',  # the path of the parent section in the json object
+                'path',  # the path of the current section in the schema
+                'a_path',  # the path of the current section in the json object
+                'type',  # the type of the current section (property, array_property, section_property)
             ]
         }
 
@@ -176,7 +175,6 @@ def get_paths(
 
     all_paths.update(arr_paths)
     all_paths.update(prop_paths)
-
     return all_paths
 
 
@@ -230,7 +228,7 @@ class ProcessingPipeline:
         """
         self.pipeline = pipeline
 
-    def apply(self, data, schema=None):
+    def apply(self, data, schema=None, proc_type='archive'):
         """
         Applies the processing pipeline to the json object based on the schema.
         """
@@ -238,7 +236,7 @@ class ProcessingPipeline:
             schema = deepcopy(data)
 
         updated_b_data = get_b_data(data)
-        for i, (proc_name, (func_apply, cond, get_func_args, proc_type)) in enumerate(
+        for i, (proc_name, (func_apply, cond, get_func_args)) in enumerate(
             self.pipeline.items()
         ):
             logger.info(f'Applying processing step {i}: {proc_name}')
@@ -247,16 +245,51 @@ class ProcessingPipeline:
             updated_b_data = update_data(deepcopy(updated_b_data), paths, func_apply)
         return deref(updated_b_data)
 
-    def clean(self, data, base_schema, target_schema, clean_func=None):
+    def clean(self, data, target_schema=None, base_schema=None, clean_func=None):
         """
         Cleans the json by deleting the paths that are in base_schema but not in target_schema.
         """
+        b_data = get_b_data(data)
         clean_func = delete_section if clean_func is None else clean_func
-        base_paths = get_paths(base_schema, None, None)
-        target_paths = get_paths(target_schema, None, None)
-        target_paths = [j[:-3] if j[-3:] == '[n]' else j for j in target_paths]
-        del_paths = {}
-        for i in base_paths:
-            if i not in target_paths:
-                del_paths[i] = base_paths[i]
-        return deref(update_data(get_b_data(data), del_paths, clean_func))
+        if isinstance(b_data, list):
+            return [
+                self._clean(i, target_schema, base_schema, clean_func) for i in b_data
+            ]
+        else:
+            return self._clean(b_data, target_schema, base_schema, clean_func)
+
+    def _clean(self, b_data, target_schema=None, base_schema=None, clean_func=None):
+
+        # If target_schema is None, delete none values and empty collections
+        if target_schema is None:
+            b_data.clean(strings=True, collections=True)
+            return deref(b_data)
+        # If base_schema is None, delete paths that are not in target_schema
+        elif base_schema is None:
+            data_key_paths = b_data.keypaths(indexes=True)
+            target_paths = get_paths(target_schema, None, None, 'a_path')
+            target_paths_arr = [i for i in target_paths if '[n]' in i]
+            target_paths = [i[:-3] if i[-3:] == '[n]' else i for i in target_paths]
+            target_paths_arr.extend(
+                [i[:-3] for i in target_paths_arr if i[-3:] == '[n]']
+            )
+            del_paths = {
+                i: [None, None, 'property']
+                for i in data_key_paths
+                if i not in target_paths
+            }
+            for i in target_paths_arr:
+                arr_paths = get_array_paths(b_data, i)
+                for arr_path in arr_paths:
+                    if arr_path in del_paths:
+                        del del_paths[arr_path]
+            return deref(update_data(b_data, del_paths, clean_func))
+        # If both target_schema and base_schema are provided, delete paths that are in base_schema but not in target_schema
+        else:
+            base_paths = get_paths(base_schema, None, None)
+            target_paths = get_paths(target_schema, None, None)
+            del_paths = {}
+            for i in base_paths:
+                if i not in target_paths:
+                    del_paths[i] = base_paths[i]
+            return deref(update_data(b_data, del_paths, clean_func))
