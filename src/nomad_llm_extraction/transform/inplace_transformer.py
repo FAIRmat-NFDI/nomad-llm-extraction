@@ -37,9 +37,10 @@ def _resolve_rule(b_data, rule, name):
     target_path = rule.target
 
     re_pattern = get_array_regex(source_path)
+    capture_pattern = re.compile(r'\[(n\d+?)\]')
 
-    source_index_positions = [x for x in re.finditer(r'\[(n\d+?)\]', source_path)]
-    target_index_positions = [x for x in re.finditer(r'\[(n\d+?)\]', target_path)]
+    source_index_positions = [x for x in capture_pattern.finditer(source_path)]
+    target_index_positions = [x for x in capture_pattern.finditer(target_path)]
     if len(source_index_positions) != len(target_index_positions):
         raise ValueError(
             'Mismatch between source and target array index placeholders: '
@@ -50,7 +51,7 @@ def _resolve_rule(b_data, rule, name):
     target_path_sections = [i.span() for i in target_index_positions]
 
     for i in b_data.keypaths(indexes=True, sort=True):
-        match = re.match(re_pattern, i)
+        match = re_pattern.match(i)
         if match:
             new_source_path = get_new_path(match, source_path, source_path_sections)
             new_target_path = get_new_path(match, target_path, target_path_sections)

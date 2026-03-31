@@ -10,6 +10,10 @@ def check_path(b_data, path):
     return path in b_data
 
 
+def check_path_keypaths(key_paths, path):
+    return path in key_paths
+
+
 def clean_path(p):
     return '.'.join([i for i in p.split('.') if i != ''])
 
@@ -43,7 +47,7 @@ def get_array_regex(path):
     re_pattern = (
         '^' + re.sub(r'\\\[((n|\\\*)\d*?)\\\]', r'\[(\\d+)\]', re_pattern) + '$'
     )
-    return re_pattern
+    return re.compile(re_pattern)
 
 
 def merge_all_of(schema):
