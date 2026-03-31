@@ -1,10 +1,9 @@
-import re
 from copy import deepcopy
 
 from loguru import logger
 
 from nomad_llm_extraction.transform.utils import (
-    check_path,
+    check_path_keypaths,
     clean_path,
     delete_section,
     deref,
@@ -178,14 +177,12 @@ def get_paths(
     return all_paths
 
 
-def get_array_paths(b_data, path):
+def get_array_paths(key_paths, path):
     """
     Returns all the paths in the json object (benedict dict) that match the given path with array indexes.
     """
     re_pattern = get_array_regex(path)
-    return [
-        i for i in b_data.keypaths(indexes=True, sort=True) if re.match(re_pattern, i)
-    ]
+    return [i for i in key_paths if re_pattern.match(i)]
 
 
 def update_data(b_data, paths, func_apply=None):
@@ -200,16 +197,16 @@ def update_data(b_data, paths, func_apply=None):
 
     if isinstance(b_data, list):
         return [update_data(i, paths, func_apply) for i in b_data]
-
+    key_paths = set(b_data.keypaths(indexes=True))
     for path, (state, func_args, stype) in paths.items():
-        if stype == 'property' and check_path(b_data, path):
+        if stype == 'property' and check_path_keypaths(key_paths, path):
             b_data = func_apply(b_data, path, func_args)
         elif stype == 'array':
             if path[-3:] == '[n]':
                 path = path[:-3]
-            array_paths = get_array_paths(b_data, path)
+            array_paths = get_array_paths(key_paths, path)
             for array_path in array_paths:
-                if check_path(b_data, array_path):
+                if check_path_keypaths(key_paths, array_path):
                     b_data = func_apply(b_data, array_path, func_args)
     return b_data
 
@@ -242,7 +239,7 @@ class ProcessingPipeline:
             logger.info(f'Applying processing step {i}: {proc_name}')
             path_type = path_types[proc_type]
             paths = get_paths(schema, cond, get_func_args, path_type)
-            updated_b_data = update_data(deepcopy(updated_b_data), paths, func_apply)
+            updated_b_data = update_data(updated_b_data, paths, func_apply)
         return deref(updated_b_data)
 
     def clean(self, data, target_schema=None, base_schema=None, clean_func=None):
@@ -288,8 +285,6 @@ class ProcessingPipeline:
         else:
             base_paths = get_paths(base_schema, None, None)
             target_paths = get_paths(target_schema, None, None)
-            del_paths = {}
-            for i in base_paths:
-                if i not in target_paths:
-                    del_paths[i] = base_paths[i]
+            del_paths = set(base_paths.keys()).difference(set(target_paths.keys()))
+            del_paths = {i: base_paths[i] for i in del_paths}
             return deref(update_data(b_data, del_paths, clean_func))
