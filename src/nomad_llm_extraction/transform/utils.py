@@ -3,11 +3,14 @@ import re
 from copy import deepcopy
 
 import jsonref
-from benedict import benedict
+from scalpl import Cut
 
 
-def check_path(b_data, path):
-    return path in b_data
+def check_path(c_data, path):
+    try:
+        return path in c_data
+    except Exception:
+        return False
 
 
 def check_path_keypaths(key_paths, path):
@@ -18,25 +21,38 @@ def clean_path(p):
     return '.'.join([i for i in p.split('.') if i != ''])
 
 
-def delete_section(b_data, path, func_args=None):
-    if check_path(b_data, path):
-        del b_data[path]
-    return b_data
+def delete_section(c_data, path, func_args=None):
+    if check_path(c_data, path):
+        del c_data[path]
+    return c_data
 
 
-def deref(b_data):
+def deref(data):
     """
     Convert a benedict object or a dictionary with references to a regular dictionary by serializing and deserializing it.
     """
-    return json.loads(json.dumps(b_data))
+    try:
+        return json.loads(json.dumps(data))
+    except Exception as e:
+        if e.args[0] == 'Object of type Cut is not JSON serializable':
+            return deref_cut(data)
+        else:
+            raise e
 
 
-def get_b_data(data):
+def deref_cut(c_data):
+    """
+    Convert a Cut object to a regular dictionary by serializing and deserializing it.
+    """
+    if isinstance(c_data, list):
+        return [json.loads(json.dumps(i.data)) for i in c_data]
+    return json.loads(json.dumps(c_data.data))
 
+
+def get_cut_data(data):
     if isinstance(data, list):
-        return [benedict(deepcopy(i)) for i in data]
-    else:
-        return benedict(deepcopy(data))
+        return [Cut(deepcopy(i)) for i in data]
+    return Cut(deepcopy(data))
 
 
 def get_array_regex(path):
@@ -48,6 +64,21 @@ def get_array_regex(path):
         '^' + re.sub(r'\\\[((n|\\\*)\d*?)\\\]', r'\[(\\d+)\]', re_pattern) + '$'
     )
     return re.compile(re_pattern)
+
+
+def get_all_paths(data, current_path=''):
+    if isinstance(data, Cut):
+        data = data.data
+    paths = [current_path] if current_path else []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            new_path = f'{current_path}.{k}' if current_path else k
+            paths.extend(get_all_paths(v, new_path))
+    elif isinstance(data, list):
+        for i, v in enumerate(data):
+            new_path = f'{current_path}[{i}]'
+            paths.extend(get_all_paths(v, new_path))
+    return set(paths)
 
 
 def merge_all_of(schema):
@@ -83,12 +114,12 @@ def resolve_schema(schema, remove_defs=False, resolve_allOf=False):
     """
     Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
     """
-    schema = jsonref.replace_refs(schema, jsonschema=True)
+    schema = jsonref.replace_refs(schema, jsonschema=True, proxies=False)
     if remove_defs and '$defs' in schema:
         del schema['$defs']
     if resolve_allOf:
         schema = merge_all_of(deepcopy(schema))
-    return deref(schema)
+    return json.loads(json.dumps(schema))
 
 
 def clean_pydantic_jsonschema(section):

@@ -6,9 +6,10 @@ from nomad_llm_extraction.transform.utils import (
     check_path_keypaths,
     clean_path,
     delete_section,
-    deref,
+    deref_cut,
+    get_all_paths,
     get_array_regex,
-    get_b_data,
+    get_cut_data,
 )
 
 path_types = {'archive': 'a_path', 'schema': 'path'}
@@ -22,8 +23,8 @@ def default_get_func_args(section, state):
     return state, None
 
 
-def default_func_apply(b_data, path, func_args):
-    return b_data
+def default_func_apply(c_data, path, func_args):
+    return c_data
 
 
 def get_section_type(section):
@@ -185,30 +186,31 @@ def get_array_paths(key_paths, path):
     return [i for i in key_paths if re_pattern.match(i)]
 
 
-def update_data(b_data, paths, func_apply=None):
+def update_data(c_data, paths, func_apply=None):
     """
-    Applies the func_apply to the paths in the json object (benedict dict).
+    Applies the func_apply to the paths in the json object (cut object).
     If the path contains arrays, applies the func_apply to all the items in the arrays.
     """
     func_apply = default_func_apply if func_apply is None else func_apply
 
-    if b_data is None:
+    if c_data is None:
         return None
 
-    if isinstance(b_data, list):
-        return [update_data(i, paths, func_apply) for i in b_data]
-    key_paths = set(b_data.keypaths(indexes=True))
+    if isinstance(c_data, list):
+        return [update_data(i, paths, func_apply) for i in c_data]
+    key_paths = get_all_paths(c_data.data)
     for path, (state, func_args, stype) in paths.items():
         if stype == 'property' and check_path_keypaths(key_paths, path):
-            b_data = func_apply(b_data, path, func_args)
+            c_data = func_apply(c_data, path, func_args)
         elif stype == 'array':
             if path[-3:] == '[n]':
                 path = path[:-3]
+            # array_paths = get_array_paths_f(key_paths, path)
             array_paths = get_array_paths(key_paths, path)
             for array_path in array_paths:
                 if check_path_keypaths(key_paths, array_path):
-                    b_data = func_apply(b_data, array_path, func_args)
-    return b_data
+                    c_data = func_apply(c_data, array_path, func_args)
+    return c_data
 
 
 class ProcessingPipeline:
@@ -232,38 +234,44 @@ class ProcessingPipeline:
         if schema is None:
             schema = deepcopy(data)
 
-        updated_b_data = get_b_data(data)
+        updated_c_data = get_cut_data(data)
         for i, (proc_name, (func_apply, cond, get_func_args)) in enumerate(
             self.pipeline.items()
         ):
             logger.info(f'Applying processing step {i}: {proc_name}')
             path_type = path_types[proc_type]
             paths = get_paths(schema, cond, get_func_args, path_type)
-            updated_b_data = update_data(updated_b_data, paths, func_apply)
-        return deref(updated_b_data)
+            updated_c_data = update_data(updated_c_data, paths, func_apply)
+        return deref_cut(updated_c_data)
 
     def clean(self, data, target_schema=None, base_schema=None, clean_func=None):
         """
         Cleans the json by deleting the paths that are in base_schema but not in target_schema.
         """
-        b_data = get_b_data(data)
+        c_data = get_cut_data(data)
         clean_func = delete_section if clean_func is None else clean_func
-        if isinstance(b_data, list):
+        if isinstance(c_data, list):
             return [
-                self._clean(i, target_schema, base_schema, clean_func) for i in b_data
+                self._clean(i, target_schema, base_schema, clean_func) for i in c_data
             ]
         else:
-            return self._clean(b_data, target_schema, base_schema, clean_func)
+            return self._clean(c_data, target_schema, base_schema, clean_func)
 
-    def _clean(self, b_data, target_schema=None, base_schema=None, clean_func=None):
+    def _clean(self, c_data, target_schema=None, base_schema=None, clean_func=None):
 
         # If target_schema is None, delete none values and empty collections
         if target_schema is None:
-            b_data.clean(strings=True, collections=True)
-            return deref(b_data)
+            data_key_paths = get_all_paths(c_data.data)
+            for path in data_key_paths:
+                value = c_data[path]
+                if value is None or (
+                    isinstance(value, (list, dict)) and len(value) == 0
+                ):
+                    del c_data[path]
+            return deref_cut(c_data)
         # If base_schema is None, delete paths that are not in target_schema
         elif base_schema is None:
-            data_key_paths = b_data.keypaths(indexes=True)
+            data_key_paths = get_all_paths(c_data.data)
             target_paths = get_paths(target_schema, None, None, 'a_path')
             target_paths_arr = [i for i in target_paths if '[n]' in i]
             target_paths = [i[:-3] if i[-3:] == '[n]' else i for i in target_paths]
@@ -276,15 +284,15 @@ class ProcessingPipeline:
                 if i not in target_paths
             }
             for i in target_paths_arr:
-                arr_paths = get_array_paths(b_data, i)
+                arr_paths = get_array_paths(c_data, i)
                 for arr_path in arr_paths:
                     if arr_path in del_paths:
                         del del_paths[arr_path]
-            return deref(update_data(b_data, del_paths, clean_func))
+            return deref_cut(update_data(c_data, del_paths, clean_func))
         # If both target_schema and base_schema are provided, delete paths that are in base_schema but not in target_schema
         else:
             base_paths = get_paths(base_schema, None, None)
             target_paths = get_paths(target_schema, None, None)
             del_paths = set(base_paths.keys()).difference(set(target_paths.keys()))
             del_paths = {i: base_paths[i] for i in del_paths}
-            return deref(update_data(b_data, del_paths, clean_func))
+            return deref_cut(update_data(c_data, del_paths, clean_func))
