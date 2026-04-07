@@ -8,8 +8,9 @@ from nomad.utils.json_transformer import Transformer
 from nomad_llm_extraction.transform.utils import (
     delete_section,
     deref,
+    get_all_paths,
     get_array_regex,
-    get_b_data,
+    get_cut_data,
 )
 
 
@@ -26,7 +27,7 @@ def get_new_path(match, path, sections):
     return new_path
 
 
-def _resolve_rule(b_data, rule, name):
+def _resolve_rule(c_data, rule, name):
     """
     Resolves a single rule with array indexes of type [n<number>] and generates new rules for all matching paths in the source data.
     """
@@ -49,8 +50,8 @@ def _resolve_rule(b_data, rule, name):
         )
     source_path_sections = [i.span() for i in source_index_positions]
     target_path_sections = [i.span() for i in target_index_positions]
-
-    for i in b_data.keypaths(indexes=True, sort=True):
+    data_paths = get_all_paths(c_data.data)
+    for i in data_paths:
         match = re_pattern.match(i)
         if match:
             new_source_path = get_new_path(match, source_path, source_path_sections)
@@ -62,7 +63,7 @@ def _resolve_rule(b_data, rule, name):
     return {name: Rules(name=name, rules=resolved_rules)}
 
 
-def resolve_rules(b_data, rules):
+def resolve_rules(c_data, rules):
     """
     Resolves rules with array indexes of type [n<number>] to apply the transformations to all matching paths in the source data.
     """
@@ -71,7 +72,7 @@ def resolve_rules(b_data, rules):
         for rule_name, rule in rules.items():
             r_rules = {
                 k: v
-                for n, r in resolve_rules(b_data, rule).items()
+                for n, r in resolve_rules(c_data, rule).items()
                 for k, v in r.rules.items()
             }
             resolved_rules[rule_name] = Rules(
@@ -79,39 +80,36 @@ def resolve_rules(b_data, rules):
             )
     elif isinstance(rules, Rules):
         for rule_name, rule in rules.rules.items():
-            resolved_rules.update(_resolve_rule(b_data, rule, rule_name))
+            resolved_rules.update(_resolve_rule(c_data, rule, rule_name))
 
     elif isinstance(rules, Rule):
-        return _resolve_rule(b_data, rules, '')
+        return _resolve_rule(c_data, rules, '')
     return resolved_rules
 
 
-def del_sources(b_source_data, rules):
+def del_sources(c_data, rules):
     """
     Deletes the source paths present in the rules from the source data.
     """
     if isinstance(rules, dict):
         for rule_name, rule in rules.items():
-            b_source_data = del_sources(b_source_data, rule)
+            c_data = del_sources(c_data, rule)
     elif isinstance(rules, Rules):
         for rule_name, rule in rules.rules.items():
-            b_source_data = delete_section(b_source_data, rule.source)
+            c_data = delete_section(c_data, rule.source)
     elif isinstance(rules, Rule):
-        b_source_data = delete_section(b_source_data, rule.source)
-    return b_source_data
+        c_data = delete_section(c_data, rule.source)
+    return c_data
 
 
-def update_source_data(
-    source_data: dict[str, Any], transformed_data: dict[str, Any], rules=None
-):
+def update_source_data(transformed_data: dict[str, Any], rules=None):
     """
     Merges the transformed json into the base archive and deletes the source paths present in the rules.
     """
-    b_source_data = get_b_data(source_data)
-    b_source_data.merge(transformed_data)
+    c_transformed_data = get_cut_data(transformed_data)
     if rules is not None:
-        b_source_data = del_sources(b_source_data, rules)
-    return deref(b_source_data)
+        c_transformed_data = del_sources(c_transformed_data, rules)
+    return deref(c_transformed_data)
 
 
 class InplaceTransformer(Transformer):
@@ -135,15 +133,14 @@ class InplaceTransformer(Transformer):
                 transformed_data.append(self.transform_inplace(item, mapping_name))
             return transformed_data
         else:
-            b_source_data = get_b_data(source_data)
-            resolved_rules = resolve_rules(b_source_data, self.mapping_dict)
+            c_source_data = get_cut_data(source_data)
+            resolved_rules = resolve_rules(c_source_data, self.mapping_dict)
             self.mapping_dict[f'{mapping_name}_resolved'] = resolved_rules[mapping_name]
             transformed_data = self.transform(
                 source_data, f'{mapping_name}_resolved', deepcopy(source_data)
             )
             updated_json = update_source_data(
-                source_data,
-                transformed_data,
-                self.mapping_dict[f'{mapping_name}_resolved'],
+                transformed_data=transformed_data,
+                rules=self.mapping_dict[f'{mapping_name}_resolved'],
             )
             return updated_json

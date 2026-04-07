@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from benedict import benedict
 from nomad.datamodel.metainfo.annotations import Rules
+from scalpl import Cut
 
 from nomad_llm_extraction.transform.common_transforms import (
     convert_unit,
@@ -156,19 +157,19 @@ def test_schema_pipeline_round_trips_unit_wrappers(resolved_schema):
 
     updated_schema = schema_pipeline.apply(resolved_schema, proc_type='schema')
     unit_paths = get_paths(resolved_schema, unit_cond, unit_args, 'path')
-    benedict_schema = benedict(deepcopy(updated_schema))
+    cut_schema = Cut(deepcopy(updated_schema))
 
     for path in unit_paths:
-        assert path in benedict_schema
-        assert 'value' in benedict_schema[path]['properties']
-        assert 'unit' in benedict_schema[path]['properties']
+        assert path in cut_schema
+        assert 'value' in cut_schema[path]['properties']
+        assert 'unit' in cut_schema[path]['properties']
 
     flattened_schema = reverse_schema_pipeline.apply(updated_schema, proc_type='schema')
-    flattened_benedict = benedict(deepcopy(flattened_schema))
+    flattened_cut_schema = Cut(deepcopy(flattened_schema))
 
     for path in unit_paths:
-        assert path in flattened_benedict
-        assert 'unit' in flattened_benedict[path]
+        assert path in flattened_cut_schema
+        assert 'unit' in flattened_cut_schema[path]
 
 
 def test_inplace_transformer_splits_concentration_units(archive):
