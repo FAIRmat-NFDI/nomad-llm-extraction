@@ -11,10 +11,13 @@ Example Usage:
     # active_engine = InstructorEngine(model_name="llama3.1", api_url="http://localhost:11434/v1")
 
     # For Cloud ChatGPT
-    # active_engine = InstructorEngine(model_name="gpt-4o")
+    # active_engine = InstructorEngine(model_name="gpt-4o", api_key="sk-...")
+
+    # json schema
+    needed to use json schema for outlines
 """
 import logging
-from typing import Type, TypeVar, Any, Optional
+from typing import Type, TypeVar, Optional
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -24,11 +27,12 @@ T = TypeVar('T', bound=BaseModel)
 
 class StructuredLLMEngine:
     """Base class for all structured extraction. its entire job is to define a strict contract or blueprint."""
-    def generate(self, prompt: str, response_model: Type[T], temperature: float = 0.1) -> T:
+    def generate(self, prompt: str, json_schema: str, temperature: float = 0.1) -> str:
         raise NotImplementedError("Subclasses must implement the generate method.")
 
 class OutlinesEngine(StructuredLLMEngine):
-    def __init__(self, model_name: str, api_url: Optional[str] = None, api_key: str = "EMPTY"):
+    def __init__(self, model_name: str, 
+                 api_url: Optional[str] = None, api_key: str = "EMPTY"):
         import outlines
         self.model_name = model_name
         
@@ -41,17 +45,21 @@ class OutlinesEngine(StructuredLLMEngine):
         self.model = outlines.from_vllm(self.client, model_name)
         logger.info(f"Initialized OutlinesEngine for {model_name}")
 
-    def generate(self, prompt: str, response_model: Type[T], temperature: float = 0.1) -> T:
+    def generate(self, prompt: str, response_model: 
+                 Type[T], temperature: float = 0.1) -> T:
         try:
             # tell outlines to use the passed pydantic model
-            result_json = self.model(prompt, output_type=response_model, temperature=temperature)
+            result_json = self.model(prompt, 
+                                     output_type=response_model, 
+                                     temperature=temperature)
             return response_model.model_validate_json(result_json)
         except Exception as e:
             logger.error(f"Outlines generation failed: {e}")
             raise
 
 class InstructorEngine(StructuredLLMEngine):
-    def __init__(self, model_name: str, api_url: Optional[str] = None, api_key: str = "EMPTY"):
+    def __init__(self, model_name: str, 
+                 api_url: Optional[str] = None, api_key: str = "EMPTY"):
         import instructor
         self.model_name = model_name
         
@@ -63,7 +71,8 @@ class InstructorEngine(StructuredLLMEngine):
         self.client = instructor.from_openai(base_client)
         logger.info(f"Initialized InstructorEngine for {model_name}")
 
-    def generate(self, prompt: str, response_model: Type[T], temperature: float = 0.1) -> T:
+    def generate(self, prompt: str, response_model: Type[T], 
+                 temperature: float = 0.1) -> T:
         try:
             return self.client.chat.completions.create(
                 model=self.model_name,
