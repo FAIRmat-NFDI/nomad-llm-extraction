@@ -3,8 +3,10 @@ from copy import deepcopy
 from loguru import logger
 
 from nomad_llm_extraction.transform.utils import (
+    check_path,
     check_path_keypaths,
     clean_path,
+    clean_section,
     delete_section,
     deref_cut,
     get_all_paths,
@@ -198,17 +200,22 @@ def update_data(c_data, paths, func_apply=None):
 
     if isinstance(c_data, list):
         return [update_data(i, paths, func_apply) for i in c_data]
+
     key_paths = get_all_paths(c_data.data)
+    if paths is None:
+        paths = {k: [None, None, 'property'] for k in key_paths}
+
     for path, (state, func_args, stype) in paths.items():
-        if stype == 'property' and check_path_keypaths(key_paths, path):
+        # if stype == 'property' and check_path_keypaths(key_paths, path):
+        if stype == 'property' and check_path(c_data, path):
             c_data = func_apply(c_data, path, func_args)
         elif stype == 'array':
             if path[-3:] == '[n]':
                 path = path[:-3]
-            # array_paths = get_array_paths_f(key_paths, path)
             array_paths = get_array_paths(key_paths, path)
             for array_path in array_paths:
-                if check_path_keypaths(key_paths, array_path):
+                # if check_path_keypaths(key_paths, array_path):
+                if check_path(c_data, array_path):
                     c_data = func_apply(c_data, array_path, func_args)
     return c_data
 
@@ -231,16 +238,24 @@ class ProcessingPipeline:
         """
         Applies the processing pipeline to the json object based on the schema.
         """
-        if schema is None:
-            schema = deepcopy(data)
-
         updated_c_data = get_cut_data(data)
         for i, (proc_name, (func_apply, cond, get_func_args)) in enumerate(
             self.pipeline.items()
         ):
+            if schema is None or proc_type == 'schema':
+                try:
+                    schema = deepcopy(updated_c_data.data)
+                except Exception as e:
+                    raise ValueError(
+                        f'Error in passed schema in processing step {proc_name}: {e}'
+                    )
             logger.info(f'Applying processing step {i}: {proc_name}')
             path_type = path_types[proc_type]
-            paths = get_paths(schema, cond, get_func_args, path_type)
+            paths = (
+                get_paths(schema, cond, get_func_args, path_type)
+                if schema is not None
+                else None
+            )
             updated_c_data = update_data(updated_c_data, paths, func_apply)
         return deref_cut(updated_c_data)
 
@@ -249,7 +264,6 @@ class ProcessingPipeline:
         Cleans the json by deleting the paths that are in base_schema but not in target_schema.
         """
         c_data = get_cut_data(data)
-        clean_func = delete_section if clean_func is None else clean_func
         if isinstance(c_data, list):
             return [
                 self._clean(i, target_schema, base_schema, clean_func) for i in c_data
@@ -259,18 +273,13 @@ class ProcessingPipeline:
 
     def _clean(self, c_data, target_schema=None, base_schema=None, clean_func=None):
 
-        # If target_schema is None, delete none values and empty collections
+        # If target_schema is None, delete none values and empty string and collections
         if target_schema is None:
-            data_key_paths = get_all_paths(c_data.data)
-            for path in data_key_paths:
-                value = c_data[path]
-                if value is None or (
-                    isinstance(value, (list, dict)) and len(value) == 0
-                ):
-                    del c_data[path]
-            return deref_cut(c_data)
+            clean_func = clean_section if clean_func is None else clean_func
+            return deref_cut(update_data(c_data, None, clean_func))
         # If base_schema is None, delete paths that are not in target_schema
         elif base_schema is None:
+            clean_func = delete_section if clean_func is None else clean_func
             data_key_paths = get_all_paths(c_data.data)
             target_paths = get_paths(target_schema, None, None, 'a_path')
             target_paths_arr = [i for i in target_paths if '[n]' in i]
@@ -284,7 +293,7 @@ class ProcessingPipeline:
                 if i not in target_paths
             }
             for i in target_paths_arr:
-                arr_paths = get_array_paths(c_data, i)
+                arr_paths = get_array_paths(data_key_paths, i)
                 for arr_path in arr_paths:
                     if arr_path in del_paths:
                         del del_paths[arr_path]

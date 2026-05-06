@@ -6,7 +6,6 @@ from nomad.datamodel.metainfo.annotations import Rule, Rules
 from nomad.utils.json_transformer import Transformer
 
 from nomad_llm_extraction.transform.utils import (
-    delete_section,
     deref,
     get_all_paths,
     get_array_regex,
@@ -27,7 +26,7 @@ def get_new_path(match, path, sections):
     return new_path
 
 
-def _resolve_rule(c_data, rule, name):
+def _resolve_rule(data, rule, name):
     """
     Resolves a single rule with array indexes of type [n<number>] and generates new rules for all matching paths in the source data.
     """
@@ -50,7 +49,7 @@ def _resolve_rule(c_data, rule, name):
         )
     source_path_sections = [i.span() for i in source_index_positions]
     target_path_sections = [i.span() for i in target_index_positions]
-    data_paths = get_all_paths(c_data.data)
+    data_paths = get_all_paths(data)
     for i in data_paths:
         match = re_pattern.match(i)
         if match:
@@ -63,7 +62,7 @@ def _resolve_rule(c_data, rule, name):
     return {name: Rules(name=name, rules=resolved_rules)}
 
 
-def resolve_rules(c_data, rules):
+def resolve_rules(data, rules):
     """
     Resolves rules with array indexes of type [n<number>] to apply the transformations to all matching paths in the source data.
     """
@@ -72,7 +71,7 @@ def resolve_rules(c_data, rules):
         for rule_name, rule in rules.items():
             r_rules = {
                 k: v
-                for n, r in resolve_rules(c_data, rule).items()
+                for n, r in resolve_rules(data, rule).items()
                 for k, v in r.rules.items()
             }
             resolved_rules[rule_name] = Rules(
@@ -80,36 +79,58 @@ def resolve_rules(c_data, rules):
             )
     elif isinstance(rules, Rules):
         for rule_name, rule in rules.rules.items():
-            resolved_rules.update(_resolve_rule(c_data, rule, rule_name))
+            resolved_rules.update(_resolve_rule(data, rule, rule_name))
 
     elif isinstance(rules, Rule):
-        return _resolve_rule(c_data, rules, '')
+        return _resolve_rule(data, rules, '')
     return resolved_rules
 
 
-def del_sources(c_data, rules):
+def delete_path(data, path):
+    parts = Transformer.parse_path(path)
+    current = data
+    for i, part in enumerate(parts):
+        if i == len(parts) - 1:
+            try:
+                del current[part]
+            except Exception:
+                print(f'{path} is not present in the data, skipping deletion')
+        else:
+            try:
+                current = current[part]
+            except Exception:
+                print(f'{path} is not present in the data, skipping deletion')
+
+
+def del_sources(data, rules):
     """
     Deletes the source paths present in the rules from the source data.
     """
     if isinstance(rules, dict):
         for rule_name, rule in rules.items():
-            c_data = del_sources(c_data, rule)
+            data = del_sources(data, rule)
     elif isinstance(rules, Rules):
         for rule_name, rule in rules.rules.items():
-            c_data = delete_section(c_data, rule.source)
+            try:
+                delete_path(data, rule.source)
+            except Exception as e:
+                print(rule.source, e)
     elif isinstance(rules, Rule):
-        c_data = delete_section(c_data, rule.source)
-    return c_data
+        try:
+            delete_path(data, rule.source)
+        except Exception as e:
+            print(rule.source, e)
+    return data
 
 
 def update_source_data(transformed_data: dict[str, Any], rules=None):
     """
     Merges the transformed json into the base archive and deletes the source paths present in the rules.
     """
-    c_transformed_data = get_cut_data(transformed_data)
+    transformed_data = deepcopy(transformed_data)
     if rules is not None:
-        c_transformed_data = del_sources(c_transformed_data, rules)
-    return deref(c_transformed_data)
+        transformed_data = del_sources(transformed_data, rules)
+    return transformed_data
 
 
 class InplaceTransformer(Transformer):
@@ -125,22 +146,33 @@ class InplaceTransformer(Transformer):
     """
 
     def transform_inplace(
-        self, source_data: dict[str, Any], mapping_name: str
+        self,
+        source_data: dict[str, Any],
+        mapping_name: str,
+        remove_source: bool = True,
+        resolve_array_rules: bool = True,
     ) -> dict[str, Any]:
         if isinstance(source_data, list):
             transformed_data = []
             for i, item in enumerate(source_data):
-                transformed_data.append(self.transform_inplace(item, mapping_name))
+                transformed_data.append(
+                    self.transform_inplace(
+                        item, mapping_name, remove_source, resolve_array_rules
+                    )
+                )
             return transformed_data
         else:
-            c_source_data = get_cut_data(source_data)
-            resolved_rules = resolve_rules(c_source_data, self.mapping_dict)
-            self.mapping_dict[f'{mapping_name}_resolved'] = resolved_rules[mapping_name]
+            new_mapping_name = mapping_name
+            if resolve_array_rules:
+                new_mapping_name = f'{mapping_name}_resolved'
+                resolved_rules = resolve_rules(source_data, self.mapping_dict)
+                self.mapping_dict[new_mapping_name] = resolved_rules[mapping_name]
             transformed_data = self.transform(
-                source_data, f'{mapping_name}_resolved', deepcopy(source_data)
+                source_data, new_mapping_name, deepcopy(source_data)
             )
-            updated_json = update_source_data(
-                transformed_data=transformed_data,
-                rules=self.mapping_dict[f'{mapping_name}_resolved'],
-            )
-            return updated_json
+            if remove_source:
+                transformed_data = update_source_data(
+                    transformed_data=transformed_data,
+                    rules=self.mapping_dict[f'{mapping_name}_resolved'],
+                )
+            return transformed_data

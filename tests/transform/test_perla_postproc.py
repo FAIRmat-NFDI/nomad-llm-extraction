@@ -25,8 +25,9 @@ from nomad_llm_extraction.transform.json_transformer import (
     get_paths,
 )
 from nomad_llm_extraction.transform.utils import (
-    clean_pydantic_jsonschema,
+    check_path,
     delete_section,
+    remove_null_anyof,
     resolve_schema,
 )
 
@@ -81,9 +82,17 @@ def get_layer_order(layers):
     return ','.join(names)
 
 
-def layer_order(b_data, path, func_args):
-    b_data['layer_order'] = get_layer_order(b_data[path])
-    return b_data
+def layer_order(c_data, path, func_args):
+    c_data['layer_order'] = get_layer_order(c_data[path])
+    return c_data
+
+
+def clean_func(c_data, path, func_args):
+    if 'additional_parameters' in path:
+        return c_data
+    if check_path(c_data, path):
+        del c_data[path]
+    return c_data
 
 
 @pytest.fixture(scope='module')
@@ -95,7 +104,7 @@ def resolved_schema():
 @pytest.fixture(scope='module')
 def perov_resolved_schema():
     with PEROV_SCHEMA_PATH.open() as handle:
-        return clean_pydantic_jsonschema(resolve_schema(json.load(handle)))
+        return remove_null_anyof(resolve_schema(json.load(handle)))
 
 
 @pytest.fixture(scope='module')
@@ -135,7 +144,7 @@ def test_processing_pipeline_matches_expected_archive(
         archive, resolved_schema, proc_type='archive'
     )
     cleaned_archive = processing_pipeline.clean(
-        updated_archive, resolved_schema, perov_resolved_schema
+        updated_archive, resolved_schema, clean_func=clean_func
     )
 
     assert cleaned_archive[0] == expected_updated_archive
