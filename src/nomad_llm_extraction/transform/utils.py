@@ -1,10 +1,14 @@
 import json
+import os
 import re
 from copy import deepcopy
 from typing import Any
 
 import jsonref
+import requests
 from scalpl import Cut
+
+NOMAD_URL = os.environ.get('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/api/v1/')
 
 
 def check_path(c_data, path):
@@ -197,7 +201,7 @@ def resolve_schema(schema, remove_defs=False, resolve_allOf=False):
     return json.loads(json.dumps(schema))
 
 
-def remove_null_anyof(schema: dict[str, Any] | list[Any]) -> dict[str, Any] | list[Any]:
+def remove_null_anyof(schema):
     """Recursively removes {'type': 'null'} from anyOf lists"""
     if isinstance(schema, dict):
         if 'anyOf' in schema:
@@ -216,3 +220,17 @@ def remove_null_anyof(schema: dict[str, Any] | list[Any]) -> dict[str, Any] | li
     elif isinstance(schema, list):
         return [remove_null_anyof(i) for i in schema]
     return schema
+
+
+def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
+    schema_url = f'{NOMAD_URL}schemas/{m_def}?format=jsonschema'
+    if unit_value:
+        schema_url += '&unit_value=true'
+    response = requests.get(schema_url)
+    if response.status_code == 200:
+        schema = response.json()
+        return schema
+    else:
+        raise ValueError(
+            f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
+        )
