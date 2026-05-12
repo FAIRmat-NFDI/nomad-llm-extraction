@@ -381,29 +381,12 @@ def _make_litellm_response(content: str) -> MagicMock:
 
 
 class TestEngineOutputNormalization:
-    """ExtractionPipeline must handle both plain strings and litellm response objects."""
+    """ExtractionPipeline enforces a strict str engine contract.
 
-    def _pipeline_with_response(self, content: str):
-        schema = {'type': 'object', 'properties': {}}
-        engine = _make_engine(return_value=_make_litellm_response(content))
-        schema_source = _make_schema_source(schema)
-        return ExtractionPipeline(engine=engine, schema_source=schema_source)
-
-    def test_litellm_response_object_parsed_successfully(self):
-        """Pipeline must extract JSON from a litellm-style response object."""
-        payload = json.dumps({'cells': [1, 2, 3]})
-        pipeline = self._pipeline_with_response(payload)
-        result = pipeline.run('paper text')
-        assert result.success is True
-        assert result.extracted_data == {'cells': [1, 2, 3]}
-
-    def test_litellm_response_raw_output_is_string(self):
-        """raw_llm_output must be the string content, not the response object."""
-        payload = json.dumps({'x': 42})
-        pipeline = self._pipeline_with_response(payload)
-        result = pipeline.run('paper text')
-        assert isinstance(result.raw_llm_output, str)
-        assert result.raw_llm_output == payload
+    Engines must return a plain ``str``; the pipeline does not normalise
+    litellm ``ModelResponse`` objects.  Only string-returning engines are
+    supported at the pipeline boundary.
+    """
 
     def test_plain_string_still_works(self):
         """Plain-string engine output (e.g. from mocks) must continue to work."""
@@ -415,9 +398,20 @@ class TestEngineOutputNormalization:
         assert result.success is True
         assert result.extracted_data == {'y': 99}
 
-    def test_invalid_content_in_response_object_fails_gracefully(self):
-        """Bad JSON inside a response object must result in a failed PipelineResult."""
-        pipeline = self._pipeline_with_response('not json {{{')
+    def test_non_str_engine_output_fails(self):
+        """Pipeline must fail if engine returns a non-string (strict contract)."""
+        engine = _make_engine(return_value=_make_litellm_response('{"x": 1}'))
+        schema_source = _make_schema_source()
+        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        result = pipeline.run('text')
+        assert result.success is False
+        assert result.extracted_data is None
+
+    def test_invalid_content_in_plain_string_fails_gracefully(self):
+        """Bad JSON string must result in a failed PipelineResult."""
+        engine = _make_engine(return_value='not json {{{')
+        schema_source = _make_schema_source()
+        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
         result = pipeline.run('text')
         assert result.success is False
         assert result.extracted_data is None

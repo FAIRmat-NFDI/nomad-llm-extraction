@@ -62,6 +62,8 @@ class PipelineResult(BaseModel):
     success: bool
     raw_llm_output: str | None = None
     extracted_data: Any = None
+    postprocessed_data: Any = None
+    archive_data: Any = None
     stages: list[StageResult] = Field(default_factory=list)
     error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

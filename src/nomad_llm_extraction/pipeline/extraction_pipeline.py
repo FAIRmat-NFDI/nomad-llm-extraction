@@ -12,21 +12,47 @@ Usage::
     result = pipeline.run(paper_text)
     if result.success:
         print(result.extracted_data)
+
+Stage hooks can be registered at construction time::
+
+    def log_schema(ctx):
+        print('Schema loaded:', ctx.schema)
+
+    pipeline = ExtractionPipeline(
+        engine=my_engine,
+        schema_source=my_schema_source,
+        stage_hooks=[('schema_load', 'after', log_schema)],
+    )
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Literal, Protocol, runtime_checkable
 
 from nomad_llm_extraction.pipeline.models import (
     PipelineResult,
     PromptConfig,
     StageResult,
 )
+from nomad_llm_extraction.pipeline.stages import (
+    ArchiveShapingStage,
+    LLMCallStage,
+    ParseResponseStage,
+    PostprocessingStage,
+    PromptBuildStage,
+    SchemaLoadStage,
+    SchemaResolveStage,
+    StageContext,
+    StageHook,
+    StageRunner,
+    ValidationStage,
+)
 
 logger = logging.getLogger(__name__)
+
+# Type alias for stage hook tuples supplied at construction time.
+StageHookSpec = tuple[str, Literal['before', 'after'], StageHook]
 
 
 @runtime_checkable
@@ -52,16 +78,40 @@ class ExtractionPipeline:
     with different backends, schema sources, validators, and visualizers
     without subclassing.
 
+    Stages are executed by a :class:`~nomad_llm_extraction.pipeline.stages.StageRunner`
+    in the following order:
+
+    1. ``schema_load``    — fetches the JSON schema from the schema source.
+    2. ``schema_resolve`` — applies optional schema resolver/optimizer.
+    3. ``prompt_build``   — assembles the LLM prompt.
+    4. ``llm_extraction`` — calls the LLM engine.
+    5. ``json_parse``     — parses the raw JSON response.
+    6. ``validation``     — runs validators (non-aborting; failures recorded).
+    7. ``postprocessing`` — applies optional postprocessor to extracted data.
+    8. ``archive_shaping``— applies optional archive shaper to postprocessed data.
+
     Args:
         engine: LLM backend implementing ``generate(prompt, json_schema) -> str``.
         schema_source: Object with ``get_schema() -> dict`` that returns the
             JSON schema constraining the LLM output.
         prompt_config: System prompt and instruction text.
         validators: Optional list of callables ``(extracted_data) -> None`` that
-            may raise to signal validation failure.  Called after a successful
-            JSON parse; failures are recorded but do not re-raise.
+            may raise to signal validation failure.  Failures are recorded in
+            the ``'validation'`` stage result and ``ctx.metadata``, but do not
+            abort subsequent stages.
         visualizers: Optional list of callables ``(result: PipelineResult) ->
             None`` invoked after the pipeline completes regardless of success.
+        stage_hooks: Optional list of ``(stage_name, when, hook)`` tuples.
+            Each hook is registered with the internal :class:`StageRunner` so
+            that it fires before or after the named stage.  This is the primary
+            extension point for validation, logging, and visualisation hooks
+            that are tied to a specific stage rather than the overall result.
+        schema_resolver: Optional callable ``(schema: dict) -> dict`` applied
+            to the loaded schema during the ``schema_resolve`` stage.
+        postprocessor: Optional callable ``(extracted_data) -> postprocessed``
+            applied to parsed data during the ``postprocessing`` stage.
+        archive_shaper: Optional callable ``(postprocessed_data) -> archive``
+            applied to postprocessed data during the ``archive_shaping`` stage.
     """
 
     def __init__(
@@ -71,12 +121,20 @@ class ExtractionPipeline:
         prompt_config: PromptConfig | None = None,
         validators: list[Any] | None = None,
         visualizers: list[Any] | None = None,
+        stage_hooks: list[StageHookSpec] | None = None,
+        schema_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        postprocessor: Callable[[Any], Any] | None = None,
+        archive_shaper: Callable[[Any], Any] | None = None,
     ) -> None:
         self.engine = engine
         self.schema_source = schema_source
         self.prompt_config = prompt_config or PromptConfig()
         self.validators = validators or []
         self.visualizers = visualizers or []
+        self._stage_hooks: list[StageHookSpec] = stage_hooks or []
+        self.schema_resolver = schema_resolver
+        self.postprocessor = postprocessor
+        self.archive_shaper = archive_shaper
 
     # ------------------------------------------------------------------
     # Public API
@@ -92,56 +150,30 @@ class ExtractionPipeline:
         Visualizers are called after the pipeline completes regardless of
         success or failure.
         """
-        stages: list[StageResult] = []
+        ctx = StageContext(text=text)
+        runner = self._build_runner()
+        stage_results = runner.run(ctx)
 
-        # Stage 1: load schema
-        schema, schema_stage = self._load_schema()
-        stages.append(schema_stage)
-        if not schema_stage.success:
+        # Determine the first failed stage (if any) for error reporting.
+        failed = next((r for r in stage_results if not r.success), None)
+        if failed is not None:
             result = PipelineResult(
                 success=False,
-                stages=stages,
-                error=schema_stage.error,
+                raw_llm_output=ctx.raw_output,
+                stages=stage_results,
+                error=failed.error,
             )
             self._run_visualizers(result)
             return result
-
-        # Stage 2: call LLM
-        raw_output, llm_stage = self._call_llm(text, schema)
-        stages.append(llm_stage)
-        if not llm_stage.success:
-            result = PipelineResult(
-                success=False,
-                stages=stages,
-                error=llm_stage.error,
-            )
-            self._run_visualizers(result)
-            return result
-
-        # Stage 3: parse JSON
-        extracted, parse_stage = self._parse_output(raw_output)
-        stages.append(parse_stage)
-        if not parse_stage.success:
-            result = PipelineResult(
-                success=False,
-                raw_llm_output=raw_output,
-                stages=stages,
-                error=parse_stage.error,
-            )
-            self._run_visualizers(result)
-            return result
-
-        # Stage 4: run validators (best-effort; failures recorded, not raised)
-        validation_stages = self._run_validators(extracted)
-        stages.extend(validation_stages)
 
         result = PipelineResult(
             success=True,
-            raw_llm_output=raw_output,
-            extracted_data=extracted,
-            stages=stages,
+            raw_llm_output=ctx.raw_output,
+            extracted_data=ctx.extracted_data,
+            postprocessed_data=ctx.postprocessed_data,
+            archive_data=ctx.archive_data,
+            stages=stage_results,
         )
-
         self._run_visualizers(result)
         return result
 
@@ -149,84 +181,24 @@ class ExtractionPipeline:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load_schema(self) -> tuple[dict[str, Any] | None, StageResult]:
-        try:
-            schema = self.schema_source.get_schema()
-            return schema, StageResult(name='schema_load', success=True, data=schema)
-        except Exception as exc:
-            msg = str(exc)
-            logger.error('Schema load failed: %s', msg)
-            return None, StageResult(name='schema_load', success=False, error=msg)
-
-    def _call_llm(
-        self, text: str, schema: dict[str, Any]
-    ) -> tuple[str | None, StageResult]:
-        prompt = self._build_prompt(text, schema)
-        try:
-            raw = self.engine.generate(prompt, schema)
-            raw_str = self._normalize_engine_output(raw)
-            return raw_str, StageResult(name='llm_extraction', success=True)
-        except Exception as exc:
-            msg = str(exc)
-            logger.error('LLM generation failed: %s', msg)
-            return None, StageResult(name='llm_extraction', success=False, error=msg)
-
-    @staticmethod
-    def _normalize_engine_output(raw: Any) -> str:
-        """Extract a plain JSON string from the engine output.
-
-        Handles two cases:
-        - A plain ``str`` (returned by test stubs and adapter wrappers).
-        - A litellm ``ModelResponse``-style object with
-          ``choices[0].message.content`` (returned by :class:`LiteLLMEngine`).
-        """
-        if isinstance(raw, str):
-            return raw
-        try:
-            return raw.choices[0].message.content
-        except (AttributeError, IndexError, TypeError) as exc:
-            raise ValueError(
-                f'Cannot extract JSON string from engine output of type '
-                f'{type(raw).__name__!r}: {exc}'
-            ) from exc
-
-    def _parse_output(
-        self, raw_output: str | None
-    ) -> tuple[Any | None, StageResult]:
-        try:
-            extracted = json.loads(raw_output)
-            return extracted, StageResult(name='json_parse', success=True)
-        except Exception as exc:
-            msg = str(exc)
-            logger.error('JSON parse failed: %s', msg)
-            return None, StageResult(name='json_parse', success=False, error=msg)
-
-    def _run_validators(self, extracted: Any) -> list[StageResult]:
-        results = []
-        for idx, validator in enumerate(self.validators):
-            name = getattr(validator, '__name__', f'validator_{idx}')
-            try:
-                validator(extracted)
-                results.append(StageResult(name=name, success=True))
-            except Exception as exc:
-                results.append(
-                    StageResult(name=name, success=False, error=str(exc))
-                )
-        return results
+    def _build_runner(self) -> StageRunner:
+        """Construct a :class:`StageRunner` wired with all pipeline stages and hooks."""
+        runner = StageRunner()
+        runner.add_stage(SchemaLoadStage(self.schema_source))
+        runner.add_stage(SchemaResolveStage(self.schema_resolver))
+        runner.add_stage(PromptBuildStage(self.prompt_config))
+        runner.add_stage(LLMCallStage(self.engine))
+        runner.add_stage(ParseResponseStage())
+        runner.add_stage(ValidationStage(self.validators))
+        runner.add_stage(PostprocessingStage(self.postprocessor))
+        runner.add_stage(ArchiveShapingStage(self.archive_shaper))
+        for stage_name, when, hook in self._stage_hooks:
+            runner.add_hook(stage_name, when, hook)
+        return runner
 
     def _run_visualizers(self, result: PipelineResult) -> None:
         for visualizer in self.visualizers:
             try:
                 visualizer(result)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning('Visualizer %r raised: %s', visualizer, exc)
-
-    def _build_prompt(self, text: str, schema: dict[str, Any]) -> str:
-        parts = []
-        if self.prompt_config.system_prompt:
-            parts.append(self.prompt_config.system_prompt)
-        if self.prompt_config.instruction_text:
-            parts.append(self.prompt_config.instruction_text)
-        parts.append(f'Here is the schema: {json.dumps(schema, indent=2)}')
-        parts.append(f'Here is the text:\n{text}')
-        return '\n'.join(parts)
