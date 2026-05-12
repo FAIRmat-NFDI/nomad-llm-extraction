@@ -34,7 +34,8 @@ dependencies = [
     "google-generativeai",
     "nomad-lab>=1.4.1",
     "loguru>=0.7.3",
-    #"scalpl>=0.4.2",
+    "scalpl>=0.4.2",
+    "litellm>=1.83.0",
 ]
 
 [project.urls]
