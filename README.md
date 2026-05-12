@@ -1,6 +1,123 @@
 # nomad-llm-extraction
 
-Repo for LLM data extraction
+A generalized LLM extraction pipeline for structured scientific data.
+
+`nomad-llm-extraction` turns unstructured research-paper text into structured JSON by
+combining an LLM backend with a user-supplied JSON schema.  It can be used standalone
+with any JSON schema, or integrated with [NOMAD](https://nomad-lab.eu/) where NOMAD
+`m_def` schemas serve as the schema source and domain-specific postprocessors map the
+LLM output to NOMAD archive shapes.
+
+The **perovskite solar cell** domain module
+(`src/nomad_llm_extraction/domains/perovskite_solar_cell/`) is the reference
+implementation.  Copy it as a starting point for new domains.
+
+## Quick start
+
+### Minimal example — any JSON schema, direct text input
+
+```python
+from nomad_llm_extraction.pipeline import ExtractionPipeline, PromptConfig
+from nomad_llm_extraction.pipeline import InlineSchemaSource
+from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
+
+schema = {
+    "type": "object",
+    "properties": {
+        "material": {"type": "string"},
+        "efficiency": {"type": "number"},
+    },
+}
+
+engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
+pipeline = ExtractionPipeline(
+    engine=engine,
+    schema_source=InlineSchemaSource(schema),
+    prompt_config=PromptConfig(
+        system_prompt="You are a materials science expert.",
+        instruction_text="Extract material properties from the paper.",
+    ),
+)
+
+result = pipeline.run(paper_text)
+if result.success:
+    print(result.extracted_data)
+```
+
+### NOMAD example — `m_def` schema + domain postprocessor
+
+```python
+from nomad_llm_extraction.pipeline import ExtractionPipeline, PromptConfig
+from nomad_llm_extraction.pipeline import NomadSchemaSource
+from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
+from nomad_llm_extraction.domains.perovskite_solar_cell.pipeline import (
+    build_pipeline,
+    SYSTEM_PROMPT,
+    INSTRUCTION_TEXT,
+)
+
+schema_source = NomadSchemaSource(
+    "nomad.datamodel.perovskite_solar_cell.PerovskiteSolarCell",
+    unit_value=True,
+    remove_defs=True,
+)
+
+# ProcessingPipeline.apply(data, schema) drives the field-mapping transforms.
+# Wrap it in a plain callable to satisfy the postprocessor interface.
+proc = build_pipeline()
+
+def postprocessor(data):
+    cells = data.get("cells", [data]) if isinstance(data, dict) else data
+    return proc.apply(cells)
+
+engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
+pipeline = ExtractionPipeline(
+    engine=engine,
+    schema_source=schema_source,
+    prompt_config=PromptConfig(
+        system_prompt=SYSTEM_PROMPT,
+        instruction_text=INSTRUCTION_TEXT,
+    ),
+    postprocessor=postprocessor,
+)
+
+result = pipeline.run(paper_text)
+if result.success:
+    nomad_archive = result.postprocessed_data
+```
+
+## Pipeline stages
+
+The pipeline runs these stages in order; each populates the shared `StageContext`:
+
+| # | Stage name | What it does |
+|---|------------|--------------|
+| 1 | `schema_load` | Fetches the JSON schema from the schema source |
+| 2 | `schema_resolve` | Applies the optional pipeline-level schema resolver |
+| 3 | `prompt_build` | Assembles the LLM prompt from text + schema + config |
+| 4 | `llm_extraction` | Calls the LLM engine |
+| 5 | `json_parse` | Parses the raw JSON response |
+| 6 | `validation` | Runs validators (non-aborting; failures are recorded) |
+| 7 | `postprocessing` | Applies optional domain postprocessor |
+| 8 | `archive_shaping` | Applies optional archive shaper |
+
+## Extension points
+
+All extension points are injected at construction time — no subclassing required:
+
+| Parameter | Type | Purpose |
+|-----------|------|---------|
+| `postprocessor` | `(data) -> data` | Domain-specific field mapping and cleanup |
+| `archive_shaper` | `(data) -> data` | Reshape to target archive format |
+| `validators` | `list[(data) -> None]` | Non-aborting data validation; errors land in `result.stages` |
+| `visualizers` | `list[(result) -> None]` | Called after every run, success or failure |
+| `stage_hooks` | `list[(name, when, hook)]` | `before`/`after` hooks on any named stage |
+| `schema_resolver` | `(schema) -> schema` | Transform schema during `schema_resolve` stage |
+| `optimizer` on schema sources | `(schema) -> schema` | Prune or annotate schema before LLM call |
+
+Fuller workflows for automated validation, result visualization, and agentic
+prompt/schema optimization are **future work**; the hooks and callables above are the
+designed extension points.
 
 This `nomad` plugin was generated with `Cookiecutter` along with `@nomad`'s [`cookiecutter-nomad-plugin`](https://github.com/FAIRmat-NFDI/cookiecutter-nomad-plugin) template.
 
