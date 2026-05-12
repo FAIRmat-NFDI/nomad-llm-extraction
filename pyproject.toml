@@ -161,6 +161,9 @@ app_entry_point = "nomad_llm_extraction.apps:app_entry_point"
 example_upload_entry_point = "nomad_llm_extraction.example_uploads:example_upload_entry_point"
 action_entry_point = "nomad_llm_extraction.actions.simple_action:simple_action_entry_point"
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [tool.cruft]
 # Avoid updating workflow files, this leads to permissions issues
 skip = [".github/*"]
