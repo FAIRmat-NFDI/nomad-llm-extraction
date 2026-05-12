@@ -578,7 +578,7 @@ class TestLiteLLMEngineReturnType:
                 return_value=None,
             ),
             patch(
-                'nomad_llm_extraction.pipeline.schema_filling.llm_engine.completion',
+                'litellm.completion',
                 return_value=mock_response,
             ) as mock_completion,
         ):
@@ -607,7 +607,7 @@ class TestLiteLLMEngineReturnType:
                 return_value=None,
             ),
             patch(
-                'nomad_llm_extraction.pipeline.schema_filling.llm_engine.completion',
+                'litellm.completion',
                 return_value=mock_response,
             ),
         ):

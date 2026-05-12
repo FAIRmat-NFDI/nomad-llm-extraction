@@ -1,0 +1,5 @@
+[nomad.plugin]
+action_entry_point = nomad_llm_extraction.actions:simple_action_entry_point
+app_entry_point = nomad_llm_extraction.apps:app_entry_point
+example_upload_entry_point = nomad_llm_extraction.example_uploads:example_upload_entry_point
+schema_package_entry_point = nomad_llm_extraction.schema_packages:schema_package_entry_point
