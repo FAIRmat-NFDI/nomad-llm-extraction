@@ -14,6 +14,12 @@ implementation.  Copy it as a starting point for new domains.
 
 ## Quick start
 
+> **Prerequisite for LiteLLMEngine examples:** `litellm` is not bundled with the
+> standard installation.  Install it separately before running the snippets below:
+> ```sh
+> pip install litellm
+> ```
+
 ### Minimal example — any JSON schema, direct text input
 
 ```python
@@ -39,6 +45,10 @@ pipeline = ExtractionPipeline(
     ),
 )
 
+paper_text = (
+    "We report a perovskite solar cell based on a MAPbI3 absorber with a band gap "
+    "of 1.55 eV and a certified power conversion efficiency of 25.1%."
+)
 result = pipeline.run(paper_text)
 if result.success:
     print(result.extracted_data)
@@ -81,9 +91,15 @@ pipeline = ExtractionPipeline(
     postprocessor=postprocessor,
 )
 
+paper_text = (
+    "We report a perovskite solar cell based on a MAPbI3 absorber with a band gap "
+    "of 1.55 eV and a certified power conversion efficiency of 25.1%."
+)
 result = pipeline.run(paper_text)
 if result.success:
-    nomad_archive = result.postprocessed_data
+    # postprocessed_data is the processed cells list returned by proc.apply().
+    # It is NOT a full NOMAD archive dict; add an archive_shaper to produce one.
+    processed_cells = result.postprocessed_data
 ```
 
 ## Pipeline stages

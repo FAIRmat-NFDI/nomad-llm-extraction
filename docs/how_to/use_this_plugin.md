@@ -120,6 +120,12 @@ Uses `get_nomad_schema()` internally; requires network access to the NOMAD API.
 
 ## LLM engine
 
+> **Prerequisite:** `litellm` is not included in the standard installation.
+> Install it before using `LiteLLMEngine`:
+> ```sh
+> pip install litellm
+> ```
+
 `LiteLLMEngine` wraps [LiteLLM](https://docs.litellm.ai/) and supports any model that
 provides structured JSON output via `response_format`.
 
@@ -167,6 +173,12 @@ pipeline = ExtractionPipeline(
     ...,
     postprocessor=postprocessor,
 )
+```
+
+`proc.apply(cells)` returns the **processed cells list** (field names renamed,
+units converted, `None` values stripped).  It is *not* a full NOMAD archive dict.
+To produce a full archive object, add an `archive_shaper` that wraps the cells list
+into the desired archive shape (e.g. `{"data": {"cells": processed_cells}}`).
 ```
 
 ### `archive_shaper` — reshape to a target archive format
