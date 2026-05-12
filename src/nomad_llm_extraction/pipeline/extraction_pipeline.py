@@ -88,6 +88,9 @@ class ExtractionPipeline:
         Returns a :class:`PipelineResult` regardless of whether individual
         stages succeed or fail — exceptions are captured and stored in the
         result rather than propagating to the caller.
+
+        Visualizers are called after the pipeline completes regardless of
+        success or failure.
         """
         stages: list[StageResult] = []
 
@@ -95,32 +98,38 @@ class ExtractionPipeline:
         schema, schema_stage = self._load_schema()
         stages.append(schema_stage)
         if not schema_stage.success:
-            return PipelineResult(
+            result = PipelineResult(
                 success=False,
                 stages=stages,
                 error=schema_stage.error,
             )
+            self._run_visualizers(result)
+            return result
 
         # Stage 2: call LLM
         raw_output, llm_stage = self._call_llm(text, schema)
         stages.append(llm_stage)
         if not llm_stage.success:
-            return PipelineResult(
+            result = PipelineResult(
                 success=False,
                 stages=stages,
                 error=llm_stage.error,
             )
+            self._run_visualizers(result)
+            return result
 
         # Stage 3: parse JSON
         extracted, parse_stage = self._parse_output(raw_output)
         stages.append(parse_stage)
         if not parse_stage.success:
-            return PipelineResult(
+            result = PipelineResult(
                 success=False,
                 raw_llm_output=raw_output,
                 stages=stages,
                 error=parse_stage.error,
             )
+            self._run_visualizers(result)
+            return result
 
         # Stage 4: run validators (best-effort; failures recorded, not raised)
         validation_stages = self._run_validators(extracted)
@@ -133,6 +142,7 @@ class ExtractionPipeline:
             stages=stages,
         )
 
+        self._run_visualizers(result)
         return result
 
     # ------------------------------------------------------------------
@@ -154,11 +164,31 @@ class ExtractionPipeline:
         prompt = self._build_prompt(text, schema)
         try:
             raw = self.engine.generate(prompt, schema)
-            return raw, StageResult(name='llm_extraction', success=True)
+            raw_str = self._normalize_engine_output(raw)
+            return raw_str, StageResult(name='llm_extraction', success=True)
         except Exception as exc:
             msg = str(exc)
             logger.error('LLM generation failed: %s', msg)
             return None, StageResult(name='llm_extraction', success=False, error=msg)
+
+    @staticmethod
+    def _normalize_engine_output(raw: Any) -> str:
+        """Extract a plain JSON string from the engine output.
+
+        Handles two cases:
+        - A plain ``str`` (returned by test stubs and adapter wrappers).
+        - A litellm ``ModelResponse``-style object with
+          ``choices[0].message.content`` (returned by :class:`LiteLLMEngine`).
+        """
+        if isinstance(raw, str):
+            return raw
+        try:
+            return raw.choices[0].message.content
+        except (AttributeError, IndexError, TypeError) as exc:
+            raise ValueError(
+                f'Cannot extract JSON string from engine output of type '
+                f'{type(raw).__name__!r}: {exc}'
+            ) from exc
 
     def _parse_output(
         self, raw_output: str | None

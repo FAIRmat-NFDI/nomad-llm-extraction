@@ -264,13 +264,41 @@ class TestExtractionPipelineRun:
         assert 'SYSTEM_MARKER' in prompt_arg
         assert 'INSTRUCTION_MARKER' in prompt_arg
 
-    def test_visualizers_not_called_by_run(self):
-        """run() must not invoke visualizers — they are side effects."""
+    def test_visualizers_called_after_run(self):
+        """run() must call each visualizer with the PipelineResult after completion."""
         pipeline, _ = self._simple_pipeline()
         viz = MagicMock()
         pipeline.visualizers = [viz]
-        pipeline.run('paper text')
-        viz.assert_not_called()
+        result = pipeline.run('paper text')
+        viz.assert_called_once_with(result)
+
+    def test_visualizers_called_even_on_failure(self):
+        """Visualizers must be called even when the pipeline fails."""
+        engine = MagicMock()
+        engine.generate.side_effect = RuntimeError('boom')
+        schema_source = _make_schema_source()
+        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        viz = MagicMock()
+        pipeline.visualizers = [viz]
+        result = pipeline.run('paper text')
+        viz.assert_called_once_with(result)
+
+    def test_visualizer_exception_does_not_propagate(self):
+        """A visualizer that raises must not abort the pipeline result."""
+        pipeline, _ = self._simple_pipeline()
+        bad_viz = MagicMock(side_effect=RuntimeError('viz error'))
+        pipeline.visualizers = [bad_viz]
+        result = pipeline.run('paper text')
+        assert isinstance(result, PipelineResult)
+
+    def test_multiple_visualizers_all_called(self):
+        """All visualizers in the list must be invoked."""
+        pipeline, _ = self._simple_pipeline()
+        viz1, viz2 = MagicMock(), MagicMock()
+        pipeline.visualizers = [viz1, viz2]
+        result = pipeline.run('paper text')
+        viz1.assert_called_once_with(result)
+        viz2.assert_called_once_with(result)
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +361,66 @@ class TestStageHookConfig:
     def test_invalid_when_rejected(self):
         with pytest.raises(Exception):
             StageHookConfig(stage_name='x', when='during')
+
+
+# ---------------------------------------------------------------------------
+# Engine contract: LiteLLMEngine returns a response object, not a raw string
+# ---------------------------------------------------------------------------
+
+def _make_litellm_response(content: str) -> MagicMock:
+    """Build a minimal mock that mirrors the litellm ModelResponse structure."""
+    msg = MagicMock()
+    msg.content = content
+    choice = MagicMock()
+    choice.message = msg
+    resp = MagicMock()
+    resp.choices = [choice]
+    # Ensure it is NOT treated as a string
+    resp.__class__ = object  # not str
+    return resp
+
+
+class TestEngineOutputNormalization:
+    """ExtractionPipeline must handle both plain strings and litellm response objects."""
+
+    def _pipeline_with_response(self, content: str):
+        schema = {'type': 'object', 'properties': {}}
+        engine = _make_engine(return_value=_make_litellm_response(content))
+        schema_source = _make_schema_source(schema)
+        return ExtractionPipeline(engine=engine, schema_source=schema_source)
+
+    def test_litellm_response_object_parsed_successfully(self):
+        """Pipeline must extract JSON from a litellm-style response object."""
+        payload = json.dumps({'cells': [1, 2, 3]})
+        pipeline = self._pipeline_with_response(payload)
+        result = pipeline.run('paper text')
+        assert result.success is True
+        assert result.extracted_data == {'cells': [1, 2, 3]}
+
+    def test_litellm_response_raw_output_is_string(self):
+        """raw_llm_output must be the string content, not the response object."""
+        payload = json.dumps({'x': 42})
+        pipeline = self._pipeline_with_response(payload)
+        result = pipeline.run('paper text')
+        assert isinstance(result.raw_llm_output, str)
+        assert result.raw_llm_output == payload
+
+    def test_plain_string_still_works(self):
+        """Plain-string engine output (e.g. from mocks) must continue to work."""
+        payload = json.dumps({'y': 99})
+        engine = _make_engine(return_value=payload)
+        schema_source = _make_schema_source()
+        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        result = pipeline.run('text')
+        assert result.success is True
+        assert result.extracted_data == {'y': 99}
+
+    def test_invalid_content_in_response_object_fails_gracefully(self):
+        """Bad JSON inside a response object must result in a failed PipelineResult."""
+        pipeline = self._pipeline_with_response('not json {{{')
+        result = pipeline.run('text')
+        assert result.success is False
+        assert result.extracted_data is None
 
 
 # ---------------------------------------------------------------------------
