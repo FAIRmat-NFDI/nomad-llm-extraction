@@ -431,7 +431,7 @@ class PostprocessingStage:
             ctx.postprocessed_data = ctx.extracted_data
             return StageResult(name=self.name, success=True)
         try:
-            ctx.postprocessed_data = self._processor(ctx.extracted_data)
+            ctx.postprocessed_data = self._processor(ctx.extracted_data, ctx.schema)
             return StageResult(name=self.name, success=True)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)

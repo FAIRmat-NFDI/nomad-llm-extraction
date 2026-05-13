@@ -39,7 +39,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from nomad_llm_extraction.transform.utils import get_nomad_schema, resolve_schema
+from nomad_llm_extraction.transform.utils import get_nomad_schema, resolve_schema, remove_sections
 
 # Type alias for the optimizer hook.
 # A SchemaOptimizer receives a resolved JSON-schema dict and returns a
@@ -71,11 +71,13 @@ class InlineSchemaSource:
         optimizer: SchemaOptimizer | None = None,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
+        remove_null_anyof: bool = False,
     ) -> None:
         self._schema = schema
         self._optimizer = optimizer
         self._remove_defs = remove_defs
         self._resolve_allOf = resolve_allOf
+        self._remove_null_anyof = remove_null_anyof
 
     def get_schema(self) -> dict[str, Any]:
         """Return the resolved (and optionally optimized) schema."""
@@ -83,6 +85,7 @@ class InlineSchemaSource:
             self._schema,
             remove_defs=self._remove_defs,
             resolve_allOf=self._resolve_allOf,
+            remove_null_anyof=self._remove_null_anyof,
         )
         if self._optimizer is not None:
             schema = self._optimizer(schema)
@@ -117,20 +120,26 @@ class NomadSchemaSource:
         optimizer: SchemaOptimizer | None = None,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
+        remove_null_anyof: bool = False,
+        exclude_fields: list[str] | None = None,
     ) -> None:
         self._m_def = m_def
         self._unit_value = unit_value
         self._optimizer = optimizer
         self._remove_defs = remove_defs
         self._resolve_allOf = resolve_allOf
+        self._remove_null_anyof = remove_null_anyof
+        self._exclude_fields = exclude_fields
 
     def get_schema(self) -> dict[str, Any]:
         """Fetch, resolve and optionally optimize the NOMAD schema."""
         schema = get_nomad_schema(self._m_def, unit_value=self._unit_value)
+        schema = remove_sections(schema, sections_to_remove=self._exclude_fields)
         schema = resolve_schema(
             schema,
             remove_defs=self._remove_defs,
             resolve_allOf=self._resolve_allOf,
+            remove_null_anyof=self._remove_null_anyof,
         )
         if self._optimizer is not None:
             schema = self._optimizer(schema)

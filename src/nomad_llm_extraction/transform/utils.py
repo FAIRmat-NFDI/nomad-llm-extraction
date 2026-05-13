@@ -189,18 +189,6 @@ def merge_all_of_lim(schema, mschema=None, limit_depth=False, proc_schemas=[]):
     return schema
 
 
-def resolve_schema(schema, remove_defs=False, resolve_allOf=False):
-    """
-    Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
-    """
-    schema = dict(jsonref.replace_refs(schema, jsonschema=True, proxies=False))
-    if remove_defs and '$defs' in schema:
-        del schema['$defs']
-    if resolve_allOf:
-        schema = merge_all_of(deepcopy(schema))
-    return json.loads(json.dumps(schema))
-
-
 def remove_null_anyof(schema):
     """Recursively removes {'type': 'null'} from anyOf lists"""
     if isinstance(schema, dict):
@@ -221,6 +209,18 @@ def remove_null_anyof(schema):
         return [remove_null_anyof(i) for i in schema]
     return schema
 
+def resolve_schema(schema, remove_defs=False, resolve_allOf=False, remove_null_anyof=False):
+    """
+    Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
+    """
+    if remove_null_anyof:
+        schema = remove_null_anyof(schema)
+    schema = dict(jsonref.replace_refs(schema, jsonschema=True, proxies=False))
+    if remove_defs and '$defs' in schema:
+        del schema['$defs']
+    if resolve_allOf:
+        schema = merge_all_of(deepcopy(schema))
+    return json.loads(json.dumps(schema))
 
 def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
     schema_url = f'{NOMAD_URL}schemas/{m_def}?format=jsonschema'
@@ -234,3 +234,46 @@ def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
         raise ValueError(
             f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
         )
+
+def get_name_from_id(section_id):
+    return section_id.split('@')[0].split('/')[-1]
+
+def remove_sections(data, sections_to_remove):
+    """
+    Recursively removes specific keys from a nested dictionary or list of dictionaries.
+    """
+    # Convert keys to a set for O(1) lookup performance
+    if not isinstance(sections_to_remove, set):
+        sections_to_remove = set(sections_to_remove)
+
+    if isinstance(data, dict):
+        for key, section in list(data.items()):
+            if isinstance(section, dict) and '$id' in section:
+                id_name = get_name_from_id(section['$id'])
+                if id_name in sections_to_remove:
+                    del data[key]
+                    continue
+            new_section = remove_sections(section, sections_to_remove)
+            if new_section is None or (
+                isinstance(new_section, (list, dict)) and len(new_section) == 0
+            ):
+                del data[key]
+            else:
+                data[key] = new_section
+
+    elif isinstance(data, list):
+        # If it's a list, check every item inside it
+        new_data = []
+        for i, item in enumerate(data):
+            add = 1
+            if isinstance(item, dict):
+                for id_field in ['$ref', '$id']:
+                    if id_field in item:
+                        id_name = get_name_from_id(item[id_field])
+                        if id_name in sections_to_remove:
+                            add = 0
+                            break
+            if add:
+                new_data.append(remove_sections(item, sections_to_remove))
+        data = new_data
+    return data
