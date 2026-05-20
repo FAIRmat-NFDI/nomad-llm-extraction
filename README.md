@@ -38,7 +38,8 @@ schema = {
 engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
 pipeline = ExtractionPipeline(
     engine=engine,
-    schema_source=InlineSchemaSource(schema),
+    extraction_schema_source=InlineSchemaSource(schema),
+    postprocessing_schema_source=InlineSchemaSource(schema),
     prompt_config=PromptConfig(
         system_prompt="You are a materials science expert.",
         instruction_text="Extract material properties from the paper.",
@@ -76,14 +77,15 @@ schema_source = NomadSchemaSource(
 # Wrap it in a plain callable to satisfy the postprocessor interface.
 proc = build_pipeline()
 
-def postprocessor(data):
+def postprocessor(data, postprocessing_schema):
     cells = data.get("cells", [data]) if isinstance(data, dict) else data
     return proc.apply(cells)
 
 engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
 pipeline = ExtractionPipeline(
     engine=engine,
-    schema_source=schema_source,
+    extraction_schema_source=schema_source,
+    postprocessing_schema_source=schema_source,
     prompt_config=PromptConfig(
         system_prompt=SYSTEM_PROMPT,
         instruction_text=INSTRUCTION_TEXT,
@@ -108,8 +110,8 @@ The pipeline runs these stages in order; each populates the shared `StageContext
 
 | # | Stage name | What it does |
 |---|------------|--------------|
-| 1 | `schema_load` | Fetches the JSON schema from the schema source |
-| 2 | `schema_resolve` | Applies the optional pipeline-level schema resolver |
+| 1 | `extraction_schema_load` | Fetches the extraction JSON schema used by prompt/LLM stages |
+| 2 | `postprocessing_schema_load` | Fetches the postprocessing JSON schema passed to the postprocessor |
 | 3 | `prompt_build` | Assembles the LLM prompt from text + schema + config |
 | 4 | `llm_extraction` | Calls the LLM engine |
 | 5 | `json_parse` | Parses the raw JSON response |
@@ -123,12 +125,11 @@ All extension points are injected at construction time — no subclassing requir
 
 | Parameter | Type | Purpose |
 |-----------|------|---------|
-| `postprocessor` | `(data) -> data` | Domain-specific field mapping and cleanup |
+| `postprocessor` | `(data, postprocessing_schema) -> data` | Domain-specific field mapping and cleanup |
 | `archive_shaper` | `(data) -> data` | Reshape to target archive format |
 | `validators` | `list[(data) -> None]` | Non-aborting data validation; errors land in `result.stages` |
 | `visualizers` | `list[(result) -> None]` | Called after every run, success or failure |
 | `stage_hooks` | `list[(name, when, hook)]` | `before`/`after` hooks on any named stage |
-| `schema_resolver` | `(schema) -> schema` | Transform schema during `schema_resolve` stage |
 | `optimizer` on schema sources | `(schema) -> schema` | Prune or annotate schema before LLM call |
 
 Fuller workflows for automated validation, result visualization, and agentic

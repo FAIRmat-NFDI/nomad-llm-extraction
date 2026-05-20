@@ -137,3 +137,5 @@ src/nomad_llm_extraction/pipeline/__pycache__/extraction_pipeline.cpython-311.py
 src/nomad_llm_extraction/pipeline/__pycache__/schema_sources.cpython-311.pyc
 src/nomad_llm_extraction/pipeline/__pycache__/stages.cpython-311.pyc
 src/nomad_llm_extraction/transform/__pycache__/utils.cpython-311.pyc
+*.pkl
+text.txt
