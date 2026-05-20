@@ -74,4 +74,3 @@ def build_pipeline() -> ProcessingPipeline:
             'remove_none': [remove_none, None, None],
         }
     )
-

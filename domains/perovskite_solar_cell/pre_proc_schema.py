@@ -1,8 +1,7 @@
 from copy import deepcopy
 
-from nomad_llm_extraction.transform.utils import remove_keys_recursive, remove_path_keys
-
 from nomad_llm_extraction.transform.json_transformer import ProcessingPipeline
+from nomad_llm_extraction.transform.utils import remove_keys_recursive, remove_path_keys
 
 KEY_MAPPING = {
     'bandgap': 'band_gap',
@@ -157,9 +156,6 @@ def pre_update_unit_value_schema(jsobj, path, unit):
             jsobj[path][key] = value_schema[key]
 
     return jsobj
-
-
-
 
 
 def get_schema(schema):
