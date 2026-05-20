@@ -15,7 +15,7 @@ Quickstart::
 
 from nomad_llm_extraction.pipeline.extraction_pipeline import (
     ExtractionPipeline,
-    ExtractionPipeline2,
+    ExtractionPipeline_old,
     LLMEngine,
     Pipeline,
     SchemaSource,
@@ -55,7 +55,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     'ExtractionPipeline',
-    'ExtractionPipeline2',
+    'ExtractionPipeline_old',
     'Pipeline',
     'InlineSchemaSource',
     'LLMEngine',

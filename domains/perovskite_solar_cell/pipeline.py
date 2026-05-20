@@ -2,7 +2,7 @@ from post_proc_pipeline import build_pipeline
 from pre_proc_schema import get_schema
 
 from nomad_llm_extraction.pipeline import (
-    ExtractionPipeline2,
+    ExtractionPipeline,
     NomadSchemaSource,
     PromptConfig,
 )
@@ -72,7 +72,7 @@ if __name__ == '__main__':
         return proc.apply(cells, schema)
 
     engine = LiteLLMEngine(model_name='claude-4-sonnet-20250514')
-    pipeline = ExtractionPipeline2(
+    pipeline = ExtractionPipeline(
         engine=engine,
         extraction_schema=extraction_schema,
         postprocessing_schema=postprocess_schema,
