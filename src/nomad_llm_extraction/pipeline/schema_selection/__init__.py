@@ -1,1 +1,0 @@
-"""Schema selection module."""

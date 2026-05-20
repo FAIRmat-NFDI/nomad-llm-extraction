@@ -1,6 +1,5 @@
-
 from post_proc_pipeline import build_pipeline
-from pre_proc_schema import exclude, get_schema
+from pre_proc_schema import get_schema
 
 from nomad_llm_extraction.pipeline import (
     ExtractionPipeline,
@@ -58,7 +57,7 @@ if __name__ == '__main__':
         resolve_allOf=True,
         exclude=exclude,
         optimizer=get_schema,
-        multi_instance_field='cells'
+        multi_instance_field='cells',
     ).get_schema()
 
     postprocess_schema = NomadSchemaSource(
@@ -91,10 +90,12 @@ if __name__ == '__main__':
     with open('extracted_null_4.pkl', 'wb') as f:
         # json.dump(extracted, f, indent=2)
         import pickle
+
         pickle.dump(result, f)
     try:
         with open('extracted_null_4.json', 'w') as f:
             import json
+
             json.dump(processed_cells, f, indent=2)
     except Exception as e:
         print(f'Error parsing extraction as JSON: {e}')
