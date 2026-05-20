@@ -6,7 +6,8 @@ Quickstart::
 
     pipeline = ExtractionPipeline(
         engine=my_engine,
-        schema_source=my_schema_source,
+        extraction_schema_source=my_extraction_schema_source,
+        postprocessing_schema_source=my_postprocessing_schema_source,
         prompt_config=PromptConfig(system_prompt='...', instruction_text='...'),
     )
     result = pipeline.run(paper_text)
@@ -37,7 +38,9 @@ _SCHEMA_SOURCES_NAMES = frozenset({'InlineSchemaSource', 'NomadSchemaSource', 'S
 def __getattr__(name: str) -> object:
     if name in _SCHEMA_SOURCES_NAMES:
         if not _SCHEMA_SOURCES:
-            from nomad_llm_extraction.pipeline import schema_sources as _ss  # noqa: PLC0415
+            from nomad_llm_extraction.pipeline import (
+                schema_sources as _ss,  # noqa: PLC0415
+            )
 
             _SCHEMA_SOURCES['InlineSchemaSource'] = _ss.InlineSchemaSource
             _SCHEMA_SOURCES['NomadSchemaSource'] = _ss.NomadSchemaSource

@@ -26,8 +26,9 @@ The main entry point.  Constructed by injecting dependencies; no subclassing nee
 from nomad_llm_extraction.pipeline import ExtractionPipeline, PromptConfig
 
 pipeline = ExtractionPipeline(
-    engine=engine,                  # LLMEngine – required
-    schema_source=schema_source,    # SchemaSource – required
+    engine=engine,                                  # LLMEngine – required
+    extraction_schema_source=extraction_schema_source,      # SchemaSource – required
+    postprocessing_schema_source=postprocessing_schema_source, # SchemaSource – required
     prompt_config=PromptConfig(     # optional
         system_prompt="...",
         instruction_text="...",
@@ -35,8 +36,7 @@ pipeline = ExtractionPipeline(
     validators=[...],               # optional – see Extension points
     visualizers=[...],              # optional
     stage_hooks=[...],              # optional
-    schema_resolver=None,           # optional callable (schema) -> schema
-    postprocessor=None,             # optional callable (data) -> data
+    postprocessor=None,             # optional callable (data, postprocessing_schema) -> data
     archive_shaper=None,            # optional callable (data) -> data
 )
 
@@ -153,7 +153,8 @@ All hooks and callables are injected at `ExtractionPipeline` construction time.
 
 ### `postprocessor` — domain-specific field mapping
 
-A callable `(extracted_data: Any) -> Any`.  Applied during the `postprocessing` stage.
+A callable `(extracted_data: Any, postprocessing_schema: dict | None) -> Any`.
+Applied during the `postprocessing` stage.
 Result lands in `result.postprocessed_data`.
 
 The perovskite domain module exposes a `build_pipeline()` factory that returns a
@@ -165,7 +166,7 @@ from nomad_llm_extraction.domains.perovskite_solar_cell.pipeline import build_pi
 
 proc = build_pipeline()
 
-def postprocessor(data):
+def postprocessor(data, postprocessing_schema):
     cells = data.get("cells", [data]) if isinstance(data, dict) else data
     return proc.apply(cells)
 
@@ -236,14 +237,9 @@ pipeline = ExtractionPipeline(
 )
 ```
 
-Stage names: `schema_load`, `schema_resolve`, `prompt_build`, `llm_extraction`,
-`json_parse`, `validation`, `postprocessing`, `archive_shaping`.
-
-### `schema_resolver` — transform the loaded schema
-
-A callable `(schema: dict) -> dict` applied during the `schema_resolve` stage.
-Distinct from the per-source `optimizer`: the resolver runs on the already-loaded
-schema and is controlled at pipeline level.
+Stage names: `extraction_schema_load`, `postprocessing_schema_load`,
+`prompt_build`, `llm_extraction`, `json_parse`, `validation`,
+`postprocessing`, `archive_shaping`.
 
 ### `optimizer` on schema sources — prune or annotate before the LLM call
 

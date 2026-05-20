@@ -35,11 +35,15 @@ Example usage::
 """
 
 from __future__ import annotations
-
+from copy import deepcopy
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
-from nomad_llm_extraction.transform.utils import get_nomad_schema, resolve_schema, remove_sections
+from nomad_llm_extraction.transform.utils import (
+    get_nomad_schema,
+    resolve_schema,
+    prune_schema,
+)
 
 # Type alias for the optimizer hook.
 # A SchemaOptimizer receives a resolved JSON-schema dict and returns a
@@ -47,94 +51,29 @@ from nomad_llm_extraction.transform.utils import get_nomad_schema, resolve_schem
 SchemaOptimizer = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-class InlineSchemaSource:
-    """Schema source backed by a JSON-schema dict supplied at construction time.
+class SchemaSource:
 
-    The input schema is never mutated; :func:`resolve_schema` is called to
-    dereference any ``$ref`` pointers before the optional *optimizer* runs.
-
-    Args:
-        schema: A JSON-schema dict.  May contain ``$ref`` and ``$defs``.
-        optimizer: Optional callable ``(schema) -> schema`` applied after ref
-            resolution.  Useful for pruning, annotating, or restructuring the
-            schema before it is sent to the LLM.
-        remove_defs: When ``True``, ``$defs`` are removed from the resolved
-            schema (forwarded to :func:`resolve_schema`).
-        resolve_allOf: When ``True``, ``allOf`` lists are merged into a single
-            dict (forwarded to :func:`resolve_schema`).
-    """
-
-    def __init__(
-        self,
-        schema: dict[str, Any],
-        *,
+    def __init__(self,
         optimizer: SchemaOptimizer | None = None,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
+        exclude: list[str] | None = None,
+        multi_instance_field: str | None = None,
     ) -> None:
-        self._schema = schema
+        self._schema: dict[str, Any] | None = None
         self._optimizer = optimizer
         self._remove_defs = remove_defs
         self._resolve_allOf = resolve_allOf
         self._remove_null_anyof = remove_null_anyof
-
+        self._exclude = exclude
+        self._multi_instance_field = multi_instance_field
     def get_schema(self) -> dict[str, Any]:
-        """Return the resolved (and optionally optimized) schema."""
-        schema = resolve_schema(
-            self._schema,
-            remove_defs=self._remove_defs,
-            resolve_allOf=self._resolve_allOf,
-            remove_null_anyof=self._remove_null_anyof,
-        )
-        if self._optimizer is not None:
-            schema = self._optimizer(schema)
-        return schema
-
-
-class NomadSchemaSource:
-    """Schema source that fetches a JSON schema from the NOMAD API.
-
-    Uses :func:`~nomad_llm_extraction.transform.utils.get_nomad_schema` to
-    retrieve the schema for a given ``m_def`` path, then resolves ``$ref``
-    pointers before returning.
-
-    Args:
-        m_def: NOMAD metainfo definition path (e.g.
-            ``'nomad.datamodel.perovskite_solar_cell.PerovskiteSolarCell'``).
-        unit_value: When ``True``, request unit-value formatted quantities from
-            the NOMAD schema endpoint.
-        optimizer: Optional callable ``(schema) -> schema`` applied after the
-            schema has been fetched and resolved.
-        remove_defs: When ``True``, ``$defs`` are stripped from the resolved
-            schema.
-        resolve_allOf: When ``True``, ``allOf`` lists are merged into a single
-            dict.
-    """
-
-    def __init__(
-        self,
-        m_def: str,
-        *,
-        unit_value: bool = False,
-        optimizer: SchemaOptimizer | None = None,
-        remove_defs: bool = False,
-        resolve_allOf: bool = False,
-        remove_null_anyof: bool = False,
-        exclude_fields: list[str] | None = None,
-    ) -> None:
-        self._m_def = m_def
-        self._unit_value = unit_value
-        self._optimizer = optimizer
-        self._remove_defs = remove_defs
-        self._resolve_allOf = resolve_allOf
-        self._remove_null_anyof = remove_null_anyof
-        self._exclude_fields = exclude_fields
-
-    def get_schema(self) -> dict[str, Any]:
-        """Fetch, resolve and optionally optimize the NOMAD schema."""
-        schema = get_nomad_schema(self._m_def, unit_value=self._unit_value)
-        schema = remove_sections(schema, sections_to_remove=self._exclude_fields)
+        if self._schema is None:
+            raise NotImplementedError("Subclasses must set self._schema before calling get_schema()")
+        schema = deepcopy(self._schema)
+        if self._exclude is not None:
+            schema = prune_schema(schema, self._exclude)
         schema = resolve_schema(
             schema,
             remove_defs=self._remove_defs,
@@ -143,4 +82,63 @@ class NomadSchemaSource:
         )
         if self._optimizer is not None:
             schema = self._optimizer(schema)
+
+        if self._multi_instance_field is not None:
+            # If multi_instance_field is set, we assume the schema describes a single instance
+            # and we wrap it in an array under the multi_instance_field key.
+            schema = {
+                'type': 'object',
+                'properties': {
+                    self._multi_instance_field: {
+                        'type': 'array',
+                        'items': schema,
+                    }
+                },
+            }
         return schema
+
+class InlineSchemaSource(SchemaSource):
+    def __init__(
+        self,
+        schema: dict[str, Any],
+        optimizer: SchemaOptimizer | None = None,
+        remove_defs: bool = False,
+        resolve_allOf: bool = False,
+        remove_null_anyof: bool = False,
+            exclude: list[str] | None = None,
+            multi_instance_field: str | None = None,
+    ) -> None:
+        super().__init__(
+            optimizer=optimizer,
+            remove_defs=remove_defs,
+            resolve_allOf=resolve_allOf,
+            remove_null_anyof=remove_null_anyof,
+            exclude=exclude,
+            multi_instance_field=multi_instance_field,
+        )
+        self._schema = schema
+
+class NomadSchemaSource(SchemaSource):
+    def __init__(
+        self,
+        m_def: str,
+        unit_value: bool = False,
+        optimizer: SchemaOptimizer | None = None,
+        remove_defs: bool = False,
+        resolve_allOf: bool = False,
+        remove_null_anyof: bool = False,
+        exclude: list[str] | None = None,
+        multi_instance_field: str | None = None,
+    ) -> None:
+        super().__init__(
+            optimizer=optimizer,
+            remove_defs=remove_defs,
+            resolve_allOf=resolve_allOf,
+            remove_null_anyof=remove_null_anyof,
+            exclude=exclude,
+            multi_instance_field=multi_instance_field,
+        )
+        self._m_def = m_def
+        self._unit_value = unit_value
+        self._schema = get_nomad_schema(m_def, unit_value=unit_value)
+

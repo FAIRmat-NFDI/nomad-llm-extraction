@@ -13,21 +13,20 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from nomad_llm_extraction.pipeline.models import PromptConfig, StageResult
+from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
 from nomad_llm_extraction.pipeline.stages import (
+    ExtractionSchemaLoadStage,
     LLMCallStage,
     ParseResponseStage,
+    PostprocessingSchemaLoadStage,
     PromptBuildStage,
-    SchemaLoadStage,
     Stage,
     StageContext,
     StageRunner,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / stubs
@@ -69,7 +68,8 @@ class TestStageContext:
 
     def test_optional_fields_default_to_none(self):
         ctx = StageContext(text='paper text')
-        assert ctx.schema is None
+        assert ctx.extraction_schema is None
+        assert ctx.postprocessing_schema is None
         assert ctx.prompt is None
         assert ctx.raw_output is None
         assert ctx.extracted_data is None
@@ -80,11 +80,13 @@ class TestStageContext:
 
     def test_fields_are_mutable(self):
         ctx = StageContext(text='text')
-        ctx.schema = {'type': 'object'}
+        ctx.extraction_schema = {'type': 'object'}
+        ctx.postprocessing_schema = {'type': 'object'}
         ctx.prompt = 'my prompt'
         ctx.raw_output = '{"x": 1}'
         ctx.extracted_data = {'x': 1}
-        assert ctx.schema == {'type': 'object'}
+        assert ctx.extraction_schema == {'type': 'object'}
+        assert ctx.postprocessing_schema == {'type': 'object'}
         assert ctx.prompt == 'my prompt'
         assert ctx.raw_output == '{"x": 1}'
         assert ctx.extracted_data == {'x': 1}
@@ -227,7 +229,11 @@ class TestStageRunnerHooks:
         received: list[StageContext] = []
         runner = StageRunner()
         runner.add_stage(_SuccessStage('s1'))
-        runner.add_hook('s1', 'after', lambda ctx: received.append(ctx))
+
+        def capture(ctx: StageContext) -> None:
+            received.append(ctx)
+
+        runner.add_hook('s1', 'after', capture)
         ctx = StageContext(text='my text')
         runner.run(ctx)
         assert len(received) == 1
@@ -273,41 +279,56 @@ class TestStageRunnerHooks:
 
 
 # ---------------------------------------------------------------------------
-# SchemaLoadStage
+# ExtractionSchemaLoadStage / PostprocessingSchemaLoadStage
 # ---------------------------------------------------------------------------
 
 
-class TestSchemaLoadStage:
-    def test_loads_schema_into_context(self):
+class TestExtractionSchemaLoadStage:
+    def test_loads_extraction_schema_into_context(self):
         source = MagicMock()
         source.get_schema.return_value = {'type': 'object', 'properties': {}}
-        stage = SchemaLoadStage(source)
+        stage = ExtractionSchemaLoadStage(source)
         ctx = StageContext(text='text')
         result = stage.run(ctx)
         assert result.success is True
-        assert ctx.schema == {'type': 'object', 'properties': {}}
+        assert ctx.extraction_schema == {'type': 'object', 'properties': {}}
 
     def test_result_contains_schema_data(self):
         schema = {'type': 'object'}
         source = MagicMock()
         source.get_schema.return_value = schema
-        stage = SchemaLoadStage(source)
+        stage = ExtractionSchemaLoadStage(source)
         result = stage.run(StageContext(text='text'))
         assert result.data == schema
 
-    def test_stage_name_is_schema_load(self):
-        stage = SchemaLoadStage(MagicMock())
-        assert stage.name == 'schema_load'
+    def test_stage_name_is_extraction_schema_load(self):
+        stage = ExtractionSchemaLoadStage(MagicMock())
+        assert stage.name == 'extraction_schema_load'
 
     def test_failure_on_source_error(self):
         source = MagicMock()
         source.get_schema.side_effect = FileNotFoundError('schema not found')
-        stage = SchemaLoadStage(source)
+        stage = ExtractionSchemaLoadStage(source)
         ctx = StageContext(text='text')
         result = stage.run(ctx)
         assert result.success is False
         assert 'schema not found' in result.error
-        assert ctx.schema is None
+        assert ctx.extraction_schema is None
+
+
+class TestPostprocessingSchemaLoadStage:
+    def test_loads_postprocessing_schema_into_context(self):
+        source = MagicMock()
+        source.get_schema.return_value = {'type': 'object', 'properties': {}}
+        stage = PostprocessingSchemaLoadStage(source)
+        ctx = StageContext(text='text')
+        result = stage.run(ctx)
+        assert result.success is True
+        assert ctx.postprocessing_schema == {'type': 'object', 'properties': {}}
+
+    def test_stage_name_is_postprocessing_schema_load(self):
+        stage = PostprocessingSchemaLoadStage(MagicMock())
+        assert stage.name == 'postprocessing_schema_load'
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +339,7 @@ class TestSchemaLoadStage:
 class TestPromptBuildStage:
     def test_builds_prompt_stored_in_context(self):
         stage = PromptBuildStage(PromptConfig())
-        ctx = StageContext(text='paper text', schema={'type': 'object'})
+        ctx = StageContext(text='paper text', extraction_schema={'type': 'object'})
         result = stage.run(ctx)
         assert result.success is True
         assert ctx.prompt is not None
@@ -326,20 +347,20 @@ class TestPromptBuildStage:
 
     def test_system_prompt_included(self):
         stage = PromptBuildStage(PromptConfig(system_prompt='SYS_MARKER'))
-        ctx = StageContext(text='text', schema={'type': 'object'})
+        ctx = StageContext(text='text', extraction_schema={'type': 'object'})
         stage.run(ctx)
         assert 'SYS_MARKER' in ctx.prompt
 
     def test_instruction_text_included(self):
         stage = PromptBuildStage(PromptConfig(instruction_text='INSTR_MARKER'))
-        ctx = StageContext(text='text', schema={'type': 'object'})
+        ctx = StageContext(text='text', extraction_schema={'type': 'object'})
         stage.run(ctx)
         assert 'INSTR_MARKER' in ctx.prompt
 
     def test_schema_serialized_into_prompt(self):
         schema = {'type': 'object', 'properties': {'x': {'type': 'number'}}}
         stage = PromptBuildStage(PromptConfig())
-        ctx = StageContext(text='text', schema=schema)
+        ctx = StageContext(text='text', extraction_schema=schema)
         stage.run(ctx)
         assert '"x"' in ctx.prompt
 
@@ -347,16 +368,16 @@ class TestPromptBuildStage:
         stage = PromptBuildStage()
         assert stage.name == 'prompt_build'
 
-    def test_fails_when_schema_missing(self):
+    def test_fails_when_extraction_schema_missing(self):
         stage = PromptBuildStage(PromptConfig())
-        ctx = StageContext(text='text')  # no schema
+        ctx = StageContext(text='text')  # no extraction_schema
         result = stage.run(ctx)
         assert result.success is False
         assert ctx.prompt is None
 
     def test_default_prompt_config_when_omitted(self):
         stage = PromptBuildStage()
-        ctx = StageContext(text='hi', schema={'type': 'object'})
+        ctx = StageContext(text='hi', extraction_schema={'type': 'object'})
         result = stage.run(ctx)
         assert result.success is True
 
@@ -371,7 +392,9 @@ class TestLLMCallStage:
         engine = MagicMock()
         engine.generate.return_value = '{"answer": 42}'
         stage = LLMCallStage(engine)
-        ctx = StageContext(text='text', schema={'type': 'object'}, prompt='my prompt')
+        ctx = StageContext(
+            text='text', extraction_schema={'type': 'object'}, prompt='my prompt'
+        )
         result = stage.run(ctx)
         assert result.success is True
         assert ctx.raw_output == '{"answer": 42}'
@@ -381,7 +404,7 @@ class TestLLMCallStage:
         engine.generate.return_value = '{}'
         schema = {'type': 'object'}
         stage = LLMCallStage(engine)
-        ctx = StageContext(text='text', schema=schema, prompt='the prompt')
+        ctx = StageContext(text='text', extraction_schema=schema, prompt='the prompt')
         stage.run(ctx)
         engine.generate.assert_called_once()
         args = engine.generate.call_args[0]
@@ -393,7 +416,7 @@ class TestLLMCallStage:
         engine.generate.return_value = '{}'
         params = {'temperature': 0.1}
         stage = LLMCallStage(engine, optional_params=params)
-        ctx = StageContext(text='text', schema={}, prompt='p')
+        ctx = StageContext(text='text', extraction_schema={}, prompt='p')
         stage.run(ctx)
         args = engine.generate.call_args[0]
         assert args[2] == params
@@ -406,7 +429,7 @@ class TestLLMCallStage:
         engine = MagicMock()
         engine.generate.side_effect = RuntimeError('timeout')
         stage = LLMCallStage(engine)
-        ctx = StageContext(text='text', schema={}, prompt='p')
+        ctx = StageContext(text='text', extraction_schema={}, prompt='p')
         result = stage.run(ctx)
         assert result.success is False
         assert 'timeout' in result.error
@@ -414,13 +437,13 @@ class TestLLMCallStage:
 
     def test_fails_when_prompt_missing(self):
         stage = LLMCallStage(MagicMock())
-        ctx = StageContext(text='text', schema={})  # no prompt
+        ctx = StageContext(text='text', extraction_schema={})  # no prompt
         result = stage.run(ctx)
         assert result.success is False
 
-    def test_fails_when_schema_missing(self):
+    def test_fails_when_extraction_schema_missing(self):
         stage = LLMCallStage(MagicMock())
-        ctx = StageContext(text='text', prompt='p')  # no schema
+        ctx = StageContext(text='text', prompt='p')  # no extraction schema
         result = stage.run(ctx)
         assert result.success is False
 
@@ -430,7 +453,7 @@ class TestLLMCallStage:
         engine.generate.return_value = object()  # not a str
 
         stage = LLMCallStage(engine)
-        ctx = StageContext(text='text', schema={}, prompt='p')
+        ctx = StageContext(text='text', extraction_schema={}, prompt='p')
         result = stage.run(ctx)
         assert result.success is False
         assert ctx.raw_output is None
@@ -488,17 +511,20 @@ class TestExtractionPipelineWithStageHooks:
 
         engine = MagicMock()
         engine.generate.return_value = json.dumps({'result': 'ok'})
-        schema_source = MagicMock()
-        schema_source.get_schema.return_value = {'type': 'object'}
+        extraction_schema_source = MagicMock()
+        extraction_schema_source.get_schema.return_value = {'type': 'object'}
+        postprocessing_schema_source = MagicMock()
+        postprocessing_schema_source.get_schema.return_value = {'type': 'object'}
         return ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             stage_hooks=stage_hooks,
         )
 
     def test_pipeline_accepts_stage_hooks_param(self):
         log: list[str] = []
-        hook = ('schema_load', 'after', lambda ctx: log.append('after_schema'))
+        hook = ('extraction_schema_load', 'after', lambda ctx: log.append('after_schema'))
         pipeline = self._make_pipeline(stage_hooks=[hook])
         result = pipeline.run('text')
         assert result.success is True
@@ -508,10 +534,10 @@ class TestExtractionPipelineWithStageHooks:
         log: list[str] = []
 
         def before_hook(ctx: StageContext) -> None:
-            # At this point schema must NOT yet be loaded
-            log.append('before' if ctx.schema is None else 'too_late')
+            # At this point extraction schema must NOT yet be loaded
+            log.append('before' if ctx.extraction_schema is None else 'too_late')
 
-        hook = ('schema_load', 'before', before_hook)
+        hook = ('extraction_schema_load', 'before', before_hook)
         pipeline = self._make_pipeline(stage_hooks=[hook])
         pipeline.run('text')
         assert 'before' in log
@@ -521,9 +547,9 @@ class TestExtractionPipelineWithStageHooks:
         log: list[str] = []
 
         def after_hook(ctx: StageContext) -> None:
-            log.append('after' if ctx.schema is not None else 'too_early')
+            log.append('after' if ctx.extraction_schema is not None else 'too_early')
 
-        hook = ('schema_load', 'after', after_hook)
+        hook = ('extraction_schema_load', 'after', after_hook)
         pipeline = self._make_pipeline(stage_hooks=[hook])
         pipeline.run('text')
         assert 'after' in log
@@ -532,7 +558,7 @@ class TestExtractionPipelineWithStageHooks:
     def test_multiple_hooks_all_fired(self):
         log: list[str] = []
         hooks = [
-            ('schema_load', 'after', lambda ctx: log.append('h1')),
+            ('extraction_schema_load', 'after', lambda ctx: log.append('h1')),
             ('llm_extraction', 'after', lambda ctx: log.append('h2')),
         ]
         pipeline = self._make_pipeline(stage_hooks=hooks)
@@ -567,8 +593,6 @@ class TestLiteLLMEngineReturnType:
     """LiteLLMEngine.generate() must return a plain str, not a ModelResponse."""
 
     def test_generate_returns_str(self):
-        from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
-
         mock_response = MagicMock()
         mock_response.choices[0].message.content = '{"x": 1}'
 
@@ -580,7 +604,7 @@ class TestLiteLLMEngineReturnType:
             patch(
                 'litellm.completion',
                 return_value=mock_response,
-            ) as mock_completion,
+            ),
         ):
             engine = LiteLLMEngine.__new__(LiteLLMEngine)
             engine.model_name = 'gpt-4o'
@@ -595,8 +619,6 @@ class TestLiteLLMEngineReturnType:
         assert result == '{"x": 1}'
 
     def test_generate_content_is_json_string(self):
-        from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
-
         payload = {'cells': [1, 2]}
         mock_response = MagicMock()
         mock_response.choices[0].message.content = json.dumps(payload)
@@ -623,57 +645,19 @@ class TestLiteLLMEngineReturnType:
 
 
 # ---------------------------------------------------------------------------
-# SchemaResolveStage
+# PostprocessingSchemaLoadStage
 # ---------------------------------------------------------------------------
 
 
-class TestSchemaResolveStage:
-    def test_stage_name_is_schema_resolve(self):
-        from nomad_llm_extraction.pipeline.stages import SchemaResolveStage
-
-        stage = SchemaResolveStage()
-        assert stage.name == 'schema_resolve'
-
-    def test_no_resolver_schema_unchanged(self):
-        from nomad_llm_extraction.pipeline.stages import SchemaResolveStage
-
-        schema = {'type': 'object', 'properties': {'x': {'type': 'number'}}}
-        stage = SchemaResolveStage()
-        ctx = StageContext(text='text', schema=schema)
+class TestPostprocessingSchemaLoadStageRunner:
+    def test_stage_loads_postprocessing_schema(self):
+        source = MagicMock()
+        source.get_schema.return_value = {'type': 'object', 'properties': {'x': {}}}
+        stage = PostprocessingSchemaLoadStage(source)
+        ctx = StageContext(text='text')
         result = stage.run(ctx)
         assert result.success is True
-        assert ctx.schema == schema
-
-    def test_resolver_callable_applied(self):
-        from nomad_llm_extraction.pipeline.stages import SchemaResolveStage
-
-        original = {'type': 'object'}
-        optimized = {'type': 'object', 'additionalProperties': False}
-        stage = SchemaResolveStage(resolver=lambda s: optimized)
-        ctx = StageContext(text='text', schema=original)
-        result = stage.run(ctx)
-        assert result.success is True
-        assert ctx.schema is optimized
-
-    def test_fails_when_schema_missing(self):
-        from nomad_llm_extraction.pipeline.stages import SchemaResolveStage
-
-        stage = SchemaResolveStage()
-        ctx = StageContext(text='text')  # schema is None
-        result = stage.run(ctx)
-        assert result.success is False
-
-    def test_failure_on_resolver_error(self):
-        from nomad_llm_extraction.pipeline.stages import SchemaResolveStage
-
-        def bad_resolver(s):
-            raise ValueError('resolver exploded')
-
-        stage = SchemaResolveStage(resolver=bad_resolver)
-        ctx = StageContext(text='text', schema={'type': 'object'})
-        result = stage.run(ctx)
-        assert result.success is False
-        assert 'resolver exploded' in result.error
+        assert ctx.postprocessing_schema == {'type': 'object', 'properties': {'x': {}}}
 
 
 # ---------------------------------------------------------------------------
@@ -782,8 +766,12 @@ class TestPostprocessingStage:
     def test_processor_callable_applied(self):
         from nomad_llm_extraction.pipeline.stages import PostprocessingStage
 
-        stage = PostprocessingStage(processor=lambda d: {**d, 'added': True})
-        ctx = StageContext(text='text', extracted_data={'x': 1})
+        stage = PostprocessingStage(processor=lambda d, s: {**d, 'added': s['name']})
+        ctx = StageContext(
+            text='text',
+            extracted_data={'x': 1},
+            postprocessing_schema={'name': True},
+        )
         result = stage.run(ctx)
         assert result.success is True
         assert ctx.postprocessed_data == {'x': 1, 'added': True}
@@ -791,7 +779,7 @@ class TestPostprocessingStage:
     def test_failure_on_processor_error(self):
         from nomad_llm_extraction.pipeline.stages import PostprocessingStage
 
-        def bad(d):
+        def bad(d, s):
             raise RuntimeError('crash')
 
         stage = PostprocessingStage(processor=bad)
@@ -893,20 +881,25 @@ class TestExtractionPipelineFullStages:
     """Verify the complete ordered stage list and validator-as-stage behaviour."""
 
     def _make_pipeline(self, validators=None, postprocessor=None, archive_shaper=None,
-                       schema_resolver=None, stage_hooks=None):
+                       stage_hooks=None):
         from nomad_llm_extraction.pipeline.extraction_pipeline import ExtractionPipeline
 
         engine = MagicMock()
         engine.generate.return_value = json.dumps({'result': 'ok'})
-        schema_source = MagicMock()
-        schema_source.get_schema.return_value = {'type': 'object'}
+        extraction_schema_source = MagicMock()
+        extraction_schema_source.get_schema.return_value = {'type': 'object'}
+        postprocessing_schema_source = MagicMock()
+        postprocessing_schema_source.get_schema.return_value = {
+            'type': 'object',
+            'properties': {'pp': {'type': 'string'}},
+        }
         return ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             validators=validators,
             postprocessor=postprocessor,
             archive_shaper=archive_shaper,
-            schema_resolver=schema_resolver,
             stage_hooks=stage_hooks,
         )
 
@@ -915,8 +908,8 @@ class TestExtractionPipelineFullStages:
         result = pipeline.run('text')
         assert result.success is True
         names = [s.name for s in result.stages]
-        assert 'schema_load' in names
-        assert 'schema_resolve' in names
+        assert 'extraction_schema_load' in names
+        assert 'postprocessing_schema_load' in names
         assert 'prompt_build' in names
         assert 'llm_extraction' in names
         assert 'json_parse' in names
@@ -929,7 +922,9 @@ class TestExtractionPipelineFullStages:
         result = pipeline.run('text')
         names = [s.name for s in result.stages]
         expected_order = [
-            'schema_load', 'schema_resolve', 'prompt_build',
+            'extraction_schema_load',
+            'postprocessing_schema_load',
+            'prompt_build',
             'llm_extraction', 'json_parse', 'validation',
             'postprocessing', 'archive_shaping',
         ]
@@ -971,29 +966,23 @@ class TestExtractionPipelineFullStages:
         pipeline.run('text')
         assert 'after_archive' in log
 
-    def test_hook_on_schema_resolve_stage(self):
+    def test_hook_on_postprocessing_schema_load_stage(self):
         log: list[str] = []
         pipeline = self._make_pipeline(
-            stage_hooks=[('schema_resolve', 'after', lambda ctx: log.append('after_resolve'))]
+            stage_hooks=[
+                (
+                    'postprocessing_schema_load',
+                    'after',
+                    lambda ctx: log.append('after_post_schema'),
+                )
+            ]
         )
         pipeline.run('text')
-        assert 'after_resolve' in log
-
-    def test_schema_resolver_applied(self):
-        resolved = [False]
-        pipeline = self._make_pipeline(
-            schema_resolver=lambda s: {**s, 'resolved': True}
-        )
-        captured: list[Any] = []
-        pipeline._stage_hooks.append(
-            ('schema_resolve', 'after', lambda ctx: captured.append(ctx.schema))
-        )
-        pipeline.run('text')
-        assert captured and captured[0].get('resolved') is True
+        assert 'after_post_schema' in log
 
     def test_postprocessor_applied(self):
         pipeline = self._make_pipeline(
-            postprocessor=lambda d: {**d, 'processed': True}
+            postprocessor=lambda d, s: {**d, 'processed': 'properties' in s}
         )
         captured: list[Any] = []
         pipeline._stage_hooks.append(

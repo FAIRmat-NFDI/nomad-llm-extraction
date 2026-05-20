@@ -10,8 +10,8 @@ Typical usage (wired automatically by :class:`~nomad_llm_extraction.pipeline.ext
     from nomad_llm_extraction.pipeline.stages import (
         StageContext,
         StageRunner,
-        SchemaLoadStage,
-        SchemaResolveStage,
+        ExtractionSchemaLoadStage,
+        PostprocessingSchemaLoadStage,
         PromptBuildStage,
         LLMCallStage,
         ParseResponseStage,
@@ -22,8 +22,8 @@ Typical usage (wired automatically by :class:`~nomad_llm_extraction.pipeline.ext
 
     ctx = StageContext(text='paper text')
     runner = StageRunner()
-    runner.add_stage(SchemaLoadStage(my_schema_source))
-    runner.add_stage(SchemaResolveStage(my_resolver))
+    runner.add_stage(ExtractionSchemaLoadStage(extraction_schema_source))
+    runner.add_stage(PostprocessingSchemaLoadStage(postprocessing_schema_source))
     runner.add_stage(PromptBuildStage(my_prompt_config))
     runner.add_stage(LLMCallStage(my_engine))
     runner.add_stage(ParseResponseStage())
@@ -55,8 +55,10 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from nomad_llm_extraction.pipeline.models import PromptConfig, StageResult
 
@@ -83,8 +85,10 @@ class StageContext:
 
     Attributes:
         text: The raw input text to extract from.
-        schema: JSON schema loaded by :class:`SchemaLoadStage` and optionally
-            transformed by :class:`SchemaResolveStage`.
+        extraction_schema: JSON schema loaded by
+            :class:`ExtractionSchemaLoadStage` and used for prompt + LLM call.
+        postprocessing_schema: JSON schema loaded by
+            :class:`PostprocessingSchemaLoadStage` and passed to the postprocessor.
         prompt: Prompt string built by :class:`PromptBuildStage`.
         raw_output: Raw LLM output string (JSON) set by :class:`LLMCallStage`.
         extracted_data: Parsed Python object set by :class:`ParseResponseStage`.
@@ -97,7 +101,8 @@ class StageContext:
     """
 
     text: str
-    schema: dict[str, Any] | None = None
+    extraction_schema: dict[str, Any] | None = None
+    postprocessing_schema: dict[str, Any] | None = None
     prompt: str | None = None
     raw_output: str | None = None
     extracted_data: Any = None
@@ -204,14 +209,36 @@ class StageRunner:
 # Concrete stage implementations
 # ---------------------------------------------------------------------------
 
-
 class SchemaLoadStage:
-    """Fetch the JSON schema from a :class:`SchemaSource` and store it in context.
+    name: str = 'schema_load'
 
-    On success, ``ctx.schema`` is populated.
+    def __init__(self, schema_source: Any, schema_type: str = 'extraction') -> None:
+        self._source = schema_source
+        self._schema_type = schema_type
+
+    def run(self, ctx: StageContext) -> StageResult:
+        try:
+            schema = self._source.get_schema()
+            if self._schema_type == 'extraction':
+                ctx.extraction_schema = schema
+            elif self._schema_type == 'postprocessing':
+                ctx.postprocessing_schema = schema
+            else:
+                raise ValueError(f'Unknown schema type: {self._schema_type}')
+            return StageResult(name=f'{self.name} for {self._schema_type}', success=True, data=schema)
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            print(traceback.format_exc())
+            logger.error('Schema load failed: %s', msg)
+            return StageResult(name=f'{self.name} for {self._schema_type}', success=False, error=msg)
+
+class ExtractionSchemaLoadStage:
+    """Fetch the extraction JSON schema from a schema source and store it in context.
+
+    On success, ``ctx.extraction_schema`` is populated.
     """
 
-    name: str = 'schema_load'
+    name: str = 'extraction_schema_load'
 
     def __init__(self, schema_source: Any) -> None:
         self._source = schema_source
@@ -219,7 +246,7 @@ class SchemaLoadStage:
     def run(self, ctx: StageContext) -> StageResult:
         try:
             schema = self._source.get_schema()
-            ctx.schema = schema
+            ctx.extraction_schema = schema
             return StageResult(name=self.name, success=True, data=schema)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
@@ -227,46 +254,33 @@ class SchemaLoadStage:
             return StageResult(name=self.name, success=False, error=msg)
 
 
-class SchemaResolveStage:
-    """Apply an optional resolver/optimizer callable to the loaded schema.
+class PostprocessingSchemaLoadStage:
+    """Fetch the postprocessing JSON schema from a schema source and store it in context.
 
-    If no resolver is provided the stage is a no-op (schema passes through
-    unchanged).  On success, ``ctx.schema`` holds the (possibly transformed)
-    schema.
-
-    Requires ``ctx.schema`` to be set (i.e. :class:`SchemaLoadStage` must have
-    run successfully before this stage).
+    On success, ``ctx.postprocessing_schema`` is populated.
     """
 
-    name: str = 'schema_resolve'
+    name: str = 'postprocessing_schema_load'
 
-    def __init__(
-        self, resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None
-    ) -> None:
-        self._resolver = resolver
+    def __init__(self, schema_source: Any) -> None:
+        self._source = schema_source
 
     def run(self, ctx: StageContext) -> StageResult:
-        if ctx.schema is None:
-            return StageResult(
-                name=self.name,
-                success=False,
-                error='Cannot resolve schema: schema not loaded',
-            )
-        if self._resolver is None:
-            return StageResult(name=self.name, success=True)
         try:
-            ctx.schema = self._resolver(ctx.schema)
-            return StageResult(name=self.name, success=True)
+            schema = self._source.get_schema()
+            ctx.postprocessing_schema = schema
+            return StageResult(name=self.name, success=True, data=schema)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
-            logger.error('Schema resolve failed: %s', msg)
+            logger.error('Postprocessing schema load failed: %s', msg)
             return StageResult(name=self.name, success=False, error=msg)
 
 
 class PromptBuildStage:
     """Assemble the LLM prompt from text, schema, and prompt configuration.
 
-    Requires ``ctx.schema`` to be set (i.e. :class:`SchemaLoadStage` must have
+    Requires ``ctx.extraction_schema`` to be set (i.e.
+    :class:`ExtractionSchemaLoadStage` must have
     run successfully before this stage).  On success, ``ctx.prompt`` is populated.
     """
 
@@ -276,16 +290,16 @@ class PromptBuildStage:
         self._prompt_config = prompt_config or PromptConfig()
 
     def run(self, ctx: StageContext) -> StageResult:
-        if ctx.schema is None:
+        if ctx.extraction_schema is None:
             return StageResult(
                 name=self.name,
                 success=False,
-                error='Cannot build prompt: schema not loaded',
+                error='Cannot build prompt: extraction schema not loaded',
             )
         try:
-            prompt = self._build_prompt(ctx.text, ctx.schema)
+            prompt = self._build_prompt(ctx.text, ctx.extraction_schema)
             ctx.prompt = prompt
-            return StageResult(name=self.name, success=True)
+            return StageResult(name=self.name, data=prompt, success=True)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             logger.error('Prompt build failed: %s', msg)
@@ -305,7 +319,7 @@ class PromptBuildStage:
 class LLMCallStage:
     """Invoke the LLM engine and store the raw JSON string in context.
 
-    Requires both ``ctx.prompt`` and ``ctx.schema`` to be set.  On success,
+    Requires both ``ctx.prompt`` and ``ctx.extraction_schema`` to be set.  On success,
     ``ctx.raw_output`` holds the JSON string returned by the engine.
 
     The engine's ``generate`` method **must** return a plain ``str``.  If it
@@ -332,14 +346,16 @@ class LLMCallStage:
                 success=False,
                 error='Cannot call LLM: prompt not built',
             )
-        if ctx.schema is None:
+        if ctx.extraction_schema is None:
             return StageResult(
                 name=self.name,
                 success=False,
-                error='Cannot call LLM: schema not loaded',
+                error='Cannot call LLM: extraction schema not loaded',
             )
         try:
-            raw = self._engine.generate(ctx.prompt, ctx.schema, self._optional_params)
+            raw = self._engine.generate(
+                ctx.prompt, ctx.extraction_schema, self._optional_params
+            )
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             logger.error('LLM generation failed: %s', msg)
@@ -354,7 +370,7 @@ class LLMCallStage:
             return StageResult(name=self.name, success=False, error=msg)
 
         ctx.raw_output = raw
-        return StageResult(name=self.name, success=True)
+        return StageResult(name=self.name, data=raw, success=True)
 
 
 class ParseResponseStage:
@@ -370,7 +386,7 @@ class ParseResponseStage:
         try:
             extracted = json.loads(ctx.raw_output)
             ctx.extracted_data = extracted
-            return StageResult(name=self.name, success=True)
+            return StageResult(name=self.name, data=extracted, success=True)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             logger.error('JSON parse failed: %s', msg)
@@ -423,7 +439,9 @@ class PostprocessingStage:
 
     name: str = 'postprocessing'
 
-    def __init__(self, processor: Callable[[Any], Any] | None = None) -> None:
+    def __init__(
+        self, processor: Callable[[Any, dict[str, Any] | None], Any] | None = None
+    ) -> None:
         self._processor = processor
 
     def run(self, ctx: StageContext) -> StageResult:
@@ -431,13 +449,42 @@ class PostprocessingStage:
             ctx.postprocessed_data = ctx.extracted_data
             return StageResult(name=self.name, success=True)
         try:
-            ctx.postprocessed_data = self._processor(ctx.extracted_data, ctx.schema)
+            ctx.postprocessed_data = self._processor(
+                ctx.extracted_data, ctx.postprocessing_schema
+            )
             return StageResult(name=self.name, success=True)
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             logger.error('Postprocessing failed: %s', msg)
             return StageResult(name=self.name, success=False, error=msg)
 
+
+class ExportToNOMADStage:
+    """Export the postprocessed data to NOMAD format using an optional exporter callable.
+
+    If no exporter is provided the stage passes ``ctx.postprocessed_data`` through
+    to ``ctx.archive_data`` unchanged.  On success, ``ctx.archive_data`` is
+    populated.
+    """
+
+    name: str = 'export_to_nomad'
+
+    def __init__(
+        self, exporter: Callable[[Any], Any] | None = None
+    ) -> None:
+        self._exporter = exporter
+
+    def run(self, ctx: StageContext) -> StageResult:
+        if self._exporter is None:
+            ctx.archive_data = ctx.postprocessed_data
+            return StageResult(name=self.name, success=True)
+        try:
+            ctx.archive_data = self._exporter(ctx.postprocessed_data)
+            return StageResult(name=self.name, success=True)
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            logger.error('Export to NOMAD failed: %s', msg)
+            return StageResult(name=self.name, success=False, error=msg)
 
 class ArchiveShapingStage:
     """Apply an optional archive shaper callable to the postprocessed data.

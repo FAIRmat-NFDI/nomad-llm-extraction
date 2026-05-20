@@ -285,7 +285,8 @@ class TestExtractionPipelineWithSchemaSources:
 
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=InlineSchemaSource(schema),
+            extraction_schema_source=InlineSchemaSource(schema),
+            postprocessing_schema_source=InlineSchemaSource(schema),
         )
         result = pipeline.run('some text')
         assert result.success is True
@@ -307,7 +308,10 @@ class TestExtractionPipelineWithSchemaSources:
 
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=InlineSchemaSource(schema, optimizer=recording_optimizer),
+            extraction_schema_source=InlineSchemaSource(
+                schema, optimizer=recording_optimizer
+            ),
+            postprocessing_schema_source=InlineSchemaSource(schema),
         )
         pipeline.run('text')
         assert len(call_log) == 1, 'Optimizer should have been called exactly once'
@@ -324,7 +328,10 @@ class TestExtractionPipelineWithSchemaSources:
 
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=NomadSchemaSource('nomad.datamodel.SomeSection'),
+            extraction_schema_source=NomadSchemaSource('nomad.datamodel.SomeSection'),
+            postprocessing_schema_source=NomadSchemaSource(
+                'nomad.datamodel.SomeSection'
+            ),
         )
         result = pipeline.run('paper text')
         assert result.success is True
@@ -383,6 +390,7 @@ class TestSchemaSourcesPublicAPI:
         )
         result = subprocess.run(
             [sys.executable, '-c', code],
+            check=False,
             capture_output=True,
             text=True,
             env=env,

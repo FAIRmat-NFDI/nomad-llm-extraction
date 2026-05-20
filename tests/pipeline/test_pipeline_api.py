@@ -41,6 +41,16 @@ def _make_schema_source(schema: dict | None = None):
     return source
 
 
+def _make_schema_sources(
+    extraction_schema: dict | None = None,
+    postprocessing_schema: dict | None = None,
+):
+    return (
+        _make_schema_source(extraction_schema),
+        _make_schema_source(postprocessing_schema),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Model tests
 # ---------------------------------------------------------------------------
@@ -117,48 +127,59 @@ class TestPipelineResult:
 # ---------------------------------------------------------------------------
 
 class TestExtractionPipelineConstruction:
-    def test_requires_engine_and_schema_source(self):
-        """Pipeline must accept engine and schema_source as injected deps."""
+    def test_requires_engine_and_two_schema_sources(self):
+        """Pipeline must accept engine plus extraction/postprocessing schema sources."""
         engine = _make_engine()
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         assert pipeline is not None
 
     def test_accepts_optional_prompt_config(self):
         engine = _make_engine()
-        schema_source = _make_schema_source()
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
         prompt_cfg = PromptConfig(system_prompt='sys', instruction_text='instr')
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             prompt_config=prompt_cfg,
         )
         assert pipeline.prompt_config.system_prompt == 'sys'
 
     def test_default_prompt_config_if_omitted(self):
         engine = _make_engine()
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         assert isinstance(pipeline.prompt_config, PromptConfig)
 
     def test_accepts_validators_list(self):
         engine = _make_engine()
-        schema_source = _make_schema_source()
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
         validator = MagicMock()
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             validators=[validator],
         )
         assert validator in pipeline.validators
 
     def test_accepts_visualizers_list(self):
         engine = _make_engine()
-        schema_source = _make_schema_source()
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
         viz = MagicMock()
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             visualizers=[viz],
         )
         assert viz in pipeline.visualizers
@@ -173,8 +194,18 @@ class TestExtractionPipelineRun:
         schema = {'type': 'object', 'properties': {'value': {'type': 'number'}}}
         extracted = {'value': 42}
         engine = _make_engine(return_value=llm_payload or json.dumps(extracted))
-        schema_source = _make_schema_source(schema)
-        return ExtractionPipeline(engine=engine, schema_source=schema_source), extracted
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=schema,
+            postprocessing_schema={'type': 'object', 'properties': {}},
+        )
+        return (
+            ExtractionPipeline(
+                engine=engine,
+                extraction_schema_source=extraction_schema_source,
+                postprocessing_schema_source=postprocessing_schema_source,
+            ),
+            extracted,
+        )
 
     def test_run_returns_pipeline_result(self):
         pipeline, _ = self._simple_pipeline()
@@ -198,32 +229,85 @@ class TestExtractionPipelineRun:
         result = pipeline.run('some paper text')
         assert result.extracted_data == expected
 
-    def test_run_uses_schema_source(self):
+    def test_run_uses_both_schema_sources(self):
         schema = {'type': 'object', 'properties': {}}
         engine = _make_engine(return_value='{}')
-        schema_source = _make_schema_source(schema)
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=schema,
+            postprocessing_schema=schema,
+        )
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         pipeline.run('text')
-        schema_source.get_schema.assert_called_once()
+        extraction_schema_source.get_schema.assert_called_once()
+        postprocessing_schema_source.get_schema.assert_called_once()
 
     def test_run_calls_engine_with_text(self):
-        schema = {'type': 'object', 'properties': {}}
+        extraction_schema = {'type': 'object', 'title': 'extraction', 'properties': {}}
+        postprocessing_schema = {
+            'type': 'object',
+            'title': 'postprocessing',
+            'properties': {},
+        }
         engine = _make_engine(return_value='{}')
-        schema_source = _make_schema_source(schema)
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=extraction_schema,
+            postprocessing_schema=postprocessing_schema,
+        )
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         pipeline.run('my paper text')
         engine.generate.assert_called_once()
         call_args = engine.generate.call_args
         # The prompt (first positional arg) should contain the text
         prompt_arg = call_args[0][0] if call_args[0] else call_args[1].get('prompt', '')
         assert 'my paper text' in prompt_arg
+        assert call_args[0][1] == extraction_schema
+
+    def test_postprocessor_receives_postprocessing_schema(self):
+        extraction_schema = {'type': 'object', 'title': 'llm-schema'}
+        postprocessing_schema = {'type': 'object', 'title': 'pp-schema'}
+        engine = _make_engine(return_value='{"value": 1}')
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=extraction_schema,
+            postprocessing_schema=postprocessing_schema,
+        )
+
+        seen: list[dict[str, Any]] = []
+
+        def postprocessor(data, schema):
+            seen.append(schema)
+            return data
+
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+            postprocessor=postprocessor,
+        )
+        result = pipeline.run('my paper text')
+        assert result.success is True
+        assert seen == [postprocessing_schema]
 
     def test_run_handles_engine_exception_gracefully(self):
         schema = {'type': 'object', 'properties': {}}
         engine = MagicMock()
         engine.generate.side_effect = RuntimeError('LLM unavailable')
-        schema_source = _make_schema_source(schema)
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=schema,
+            postprocessing_schema=schema,
+        )
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is False
         assert result.error is not None
@@ -231,17 +315,28 @@ class TestExtractionPipelineRun:
 
     def test_run_handles_schema_source_exception_gracefully(self):
         engine = _make_engine(return_value='{}')
-        schema_source = MagicMock()
-        schema_source.get_schema.side_effect = FileNotFoundError('schema.json not found')
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source = MagicMock()
+        extraction_schema_source.get_schema.side_effect = FileNotFoundError(
+            'schema.json not found'
+        )
+        postprocessing_schema_source = _make_schema_source()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is False
         assert 'schema.json not found' in result.error
 
     def test_run_handles_invalid_json_output(self):
         engine = _make_engine(return_value='not valid json {{{')
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is False
         assert result.extracted_data is None
@@ -249,13 +344,17 @@ class TestExtractionPipelineRun:
     def test_prompt_config_injected_into_prompt(self):
         schema = {'type': 'object', 'properties': {}}
         engine = _make_engine(return_value='{}')
-        schema_source = _make_schema_source(schema)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources(
+            extraction_schema=schema,
+            postprocessing_schema=schema,
+        )
         prompt_cfg = PromptConfig(
             system_prompt='SYSTEM_MARKER', instruction_text='INSTRUCTION_MARKER'
         )
         pipeline = ExtractionPipeline(
             engine=engine,
-            schema_source=schema_source,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
             prompt_config=prompt_cfg,
         )
         pipeline.run('paper text')
@@ -276,8 +375,12 @@ class TestExtractionPipelineRun:
         """Visualizers must be called even when the pipeline fails."""
         engine = MagicMock()
         engine.generate.side_effect = RuntimeError('boom')
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         viz = MagicMock()
         pipeline.visualizers = [viz]
         result = pipeline.run('paper text')
@@ -392,8 +495,12 @@ class TestEngineOutputNormalization:
         """Plain-string engine output (e.g. from mocks) must continue to work."""
         payload = json.dumps({'y': 99})
         engine = _make_engine(return_value=payload)
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is True
         assert result.extracted_data == {'y': 99}
@@ -401,8 +508,12 @@ class TestEngineOutputNormalization:
     def test_non_str_engine_output_fails(self):
         """Pipeline must fail if engine returns a non-string (strict contract)."""
         engine = _make_engine(return_value=_make_litellm_response('{"x": 1}'))
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is False
         assert result.extracted_data is None
@@ -410,8 +521,12 @@ class TestEngineOutputNormalization:
     def test_invalid_content_in_plain_string_fails_gracefully(self):
         """Bad JSON string must result in a failed PipelineResult."""
         engine = _make_engine(return_value='not json {{{')
-        schema_source = _make_schema_source()
-        pipeline = ExtractionPipeline(engine=engine, schema_source=schema_source)
+        extraction_schema_source, postprocessing_schema_source = _make_schema_sources()
+        pipeline = ExtractionPipeline(
+            engine=engine,
+            extraction_schema_source=extraction_schema_source,
+            postprocessing_schema_source=postprocessing_schema_source,
+        )
         result = pipeline.run('text')
         assert result.success is False
         assert result.extracted_data is None

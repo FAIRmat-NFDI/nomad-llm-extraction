@@ -45,7 +45,8 @@ engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
 # 3. Build the pipeline.
 pipeline = ExtractionPipeline(
     engine=engine,
-    schema_source=InlineSchemaSource(schema, remove_defs=True),
+    extraction_schema_source=InlineSchemaSource(schema, remove_defs=True),
+    postprocessing_schema_source=InlineSchemaSource(schema, remove_defs=True),
     prompt_config=PromptConfig(
         system_prompt="You are a materials science expert.",
         instruction_text="Extract material properties from the abstract.",
@@ -109,7 +110,7 @@ schema_source = NomadSchemaSource(
 #    a plain callable to satisfy the postprocessor interface.
 proc_pipeline = build_pipeline()
 
-def postprocessor(data):
+def postprocessor(data, postprocessing_schema):
     # Extract the cells list from the LLM output dict if present.
     cells = data.get("cells", [data]) if isinstance(data, dict) else data
     return proc_pipeline.apply(cells)
@@ -120,7 +121,8 @@ engine = LiteLLMEngine(model_name="gpt-4o", api_key="sk-...")
 # 4. Build the pipeline.
 pipeline = ExtractionPipeline(
     engine=engine,
-    schema_source=schema_source,
+    extraction_schema_source=schema_source,
+    postprocessing_schema_source=schema_source,
     prompt_config=PromptConfig(
         system_prompt=SYSTEM_PROMPT,
         instruction_text=INSTRUCTION_TEXT,
@@ -182,7 +184,8 @@ def log_validation(ctx):
 
 pipeline = ExtractionPipeline(
     engine=engine,
-    schema_source=schema_source,
+    extraction_schema_source=schema_source,
+    postprocessing_schema_source=schema_source,
     stage_hooks=[
         ("llm_extraction", "after", log_after_llm),
         ("validation", "after", log_validation),

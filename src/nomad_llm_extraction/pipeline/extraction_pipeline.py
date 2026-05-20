@@ -6,7 +6,8 @@ Usage::
 
     pipeline = ExtractionPipeline(
         engine=my_engine,
-        schema_source=my_schema_source,
+        extraction_schema_source=my_extraction_schema_source,
+        postprocessing_schema_source=my_postprocessing_schema_source,
         prompt_config=PromptConfig(system_prompt='...', instruction_text='...'),
     )
     result = pipeline.run(paper_text)
@@ -16,37 +17,34 @@ Usage::
 Stage hooks can be registered at construction time::
 
     def log_schema(ctx):
-        print('Schema loaded:', ctx.schema)
+        print('Extraction schema loaded:', ctx.extraction_schema)
 
     pipeline = ExtractionPipeline(
         engine=my_engine,
-        schema_source=my_schema_source,
-        stage_hooks=[('schema_load', 'after', log_schema)],
+        extraction_schema_source=my_extraction_schema_source,
+        postprocessing_schema_source=my_postprocessing_schema_source,
+        stage_hooks=[('extraction_schema_load', 'after', log_schema)],
     )
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Literal, Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Literal, Protocol, runtime_checkable
 
-from nomad_llm_extraction.pipeline.models import (
-    PipelineResult,
-    PromptConfig,
-    StageResult,
-)
+from nomad_llm_extraction.pipeline.models import PipelineResult, PromptConfig
 from nomad_llm_extraction.pipeline.stages import (
-    ArchiveShapingStage,
+    SchemaLoadStage,
     LLMCallStage,
     ParseResponseStage,
     PostprocessingStage,
     PromptBuildStage,
-    SchemaLoadStage,
-    SchemaResolveStage,
     StageContext,
     StageHook,
     StageRunner,
     ValidationStage,
+    ExportToNOMADStage,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,19 +79,21 @@ class ExtractionPipeline:
     Stages are executed by a :class:`~nomad_llm_extraction.pipeline.stages.StageRunner`
     in the following order:
 
-    1. ``schema_load``    — fetches the JSON schema from the schema source.
-    2. ``schema_resolve`` — applies optional schema resolver/optimizer.
-    3. ``prompt_build``   — assembles the LLM prompt.
-    4. ``llm_extraction`` — calls the LLM engine.
-    5. ``json_parse``     — parses the raw JSON response.
-    6. ``validation``     — runs validators (non-aborting; failures recorded).
-    7. ``postprocessing`` — applies optional postprocessor to extracted data.
-    8. ``archive_shaping``— applies optional archive shaper to postprocessed data.
+    1. ``extraction_schema_load``    — loads extraction schema.
+    2. ``postprocessing_schema_load`` — loads postprocessing schema.
+    3. ``prompt_build``              — assembles the LLM prompt.
+    4. ``llm_extraction``            — calls the LLM engine.
+    5. ``json_parse``                — parses the raw JSON response.
+    6. ``validation``                — runs validators (non-aborting; failures recorded).
+    7. ``postprocessing``            — applies optional postprocessor to extracted data.
+    8. ``archive_shaping``           — applies optional archive shaper to postprocessed data.
 
     Args:
         engine: LLM backend implementing ``generate(prompt, json_schema) -> str``.
-        schema_source: Object with ``get_schema() -> dict`` that returns the
-            JSON schema constraining the LLM output.
+        extraction_schema_source: Object with ``get_schema() -> dict`` for
+            prompt construction and LLM extraction constraints.
+        postprocessing_schema_source: Object with ``get_schema() -> dict`` passed
+            to the postprocessor so postprocessing can use a separate schema.
         prompt_config: System prompt and instruction text.
         validators: Optional list of callables ``(extracted_data) -> None`` that
             may raise to signal validation failure.  Failures are recorded in
@@ -106,9 +106,8 @@ class ExtractionPipeline:
             that it fires before or after the named stage.  This is the primary
             extension point for validation, logging, and visualisation hooks
             that are tied to a specific stage rather than the overall result.
-        schema_resolver: Optional callable ``(schema: dict) -> dict`` applied
-            to the loaded schema during the ``schema_resolve`` stage.
-        postprocessor: Optional callable ``(extracted_data) -> postprocessed``
+        postprocessor: Optional callable
+            ``(extracted_data, postprocessing_schema) -> postprocessed``
             applied to parsed data during the ``postprocessing`` stage.
         archive_shaper: Optional callable ``(postprocessed_data) -> archive``
             applied to postprocessed data during the ``archive_shaping`` stage.
@@ -117,22 +116,22 @@ class ExtractionPipeline:
     def __init__(
         self,
         engine: LLMEngine,
-        schema_source: SchemaSource,
+        extraction_schema: dict[str, Any],
+        postprocessing_schema: dict[str, Any] | None = None,
         prompt_config: PromptConfig | None = None,
         validators: list[Any] | None = None,
         visualizers: list[Any] | None = None,
         stage_hooks: list[StageHookSpec] | None = None,
-        schema_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
-        postprocessor: Callable[[Any], Any] | None = None,
+        postprocessor: Callable[[Any, dict[str, Any] | None], Any] | None = None,
         archive_shaper: Callable[[Any], Any] | None = None,
     ) -> None:
         self.engine = engine
-        self.schema_source = schema_source
+        self.extraction_schema = extraction_schema
+        self.postprocessing_schema = postprocessing_schema
         self.prompt_config = prompt_config or PromptConfig()
         self.validators = validators or []
         self.visualizers = visualizers or []
         self._stage_hooks: list[StageHookSpec] = stage_hooks or []
-        self.schema_resolver = schema_resolver
         self.postprocessor = postprocessor
         self.archive_shaper = archive_shaper
 
@@ -150,7 +149,7 @@ class ExtractionPipeline:
         Visualizers are called after the pipeline completes regardless of
         success or failure.
         """
-        ctx = StageContext(text=text)
+        ctx = StageContext(extraction_schema=self.extraction_schema, postprocessing_schema=self.postprocessing_schema, text=text)
         runner = self._build_runner()
         stage_results = runner.run(ctx)
 
@@ -184,14 +183,14 @@ class ExtractionPipeline:
     def _build_runner(self) -> StageRunner:
         """Construct a :class:`StageRunner` wired with all pipeline stages and hooks."""
         runner = StageRunner()
-        runner.add_stage(SchemaLoadStage(self.schema_source))
-        runner.add_stage(SchemaResolveStage(self.schema_resolver))
+        # runner.add_stage(SchemaLoadStage(self.extraction_schema_source, 'extraction'))
+        # runner.add_stage(SchemaLoadStage(self.postprocessing_schema_source, 'postprocessing'))
         runner.add_stage(PromptBuildStage(self.prompt_config))
         runner.add_stage(LLMCallStage(self.engine))
         runner.add_stage(ParseResponseStage())
         runner.add_stage(ValidationStage(self.validators))
         runner.add_stage(PostprocessingStage(self.postprocessor))
-        runner.add_stage(ArchiveShapingStage(self.archive_shaper))
+        # runner.add_stage(ExportToNOMADStage(self.exporter))
         for stage_name, when, hook in self._stage_hooks:
             runner.add_hook(stage_name, when, hook)
         return runner
