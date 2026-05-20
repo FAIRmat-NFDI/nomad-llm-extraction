@@ -57,10 +57,14 @@ import json
 import logging
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Literal
 
-from nomad_llm_extraction.pipeline.models import PromptConfig, StageResult
+from nomad_llm_extraction.pipeline.models import (
+    PromptConfig,
+    Stage,
+    StageContext,
+    StageResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,69 +73,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 StageHook = Callable[['StageContext'], None]
-
-
-# ---------------------------------------------------------------------------
-# Shared stage context
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class StageContext:
-    """Mutable state shared between pipeline stages.
-
-    Stages read inputs from *ctx* and write their outputs back into it so that
-    subsequent stages and hooks can access the accumulated data.
-
-    Attributes:
-        text: The raw input text to extract from.
-        extraction_schema: JSON schema loaded by
-            :class:`ExtractionSchemaLoadStage` and used for prompt + LLM call.
-        postprocessing_schema: JSON schema loaded by
-            :class:`PostprocessingSchemaLoadStage` and passed to the postprocessor.
-        prompt: Prompt string built by :class:`PromptBuildStage`.
-        raw_output: Raw LLM output string (JSON) set by :class:`LLMCallStage`.
-        extracted_data: Parsed Python object set by :class:`ParseResponseStage`.
-        postprocessed_data: Data after optional postprocessing set by
-            :class:`PostprocessingStage`.
-        archive_data: Data after optional archive shaping set by
-            :class:`ArchiveShapingStage`.
-        metadata: Free-form dict for carrying auxiliary data (e.g. timing,
-            token counts, validation errors) without polluting typed fields.
-    """
-
-    text: str
-    extraction_schema: dict[str, Any] | None = None
-    postprocessing_schema: dict[str, Any] | None = None
-    prompt: str | None = None
-    raw_output: str | None = None
-    extracted_data: Any = None
-    postprocessed_data: Any = None
-    archive_data: Any = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Stage protocol
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class Stage(Protocol):
-    """A single named unit of pipeline work.
-
-    Implementations must expose a ``name`` attribute and a ``run`` method that
-    accepts a :class:`StageContext` and returns a :class:`StageResult`.
-    """
-
-    name: str
-
-    def run(self, ctx: StageContext) -> StageResult: ...
-
-
-# ---------------------------------------------------------------------------
-# StageRunner
-# ---------------------------------------------------------------------------
 
 
 class StageRunner:
@@ -166,7 +107,7 @@ class StageRunner:
         """
         self._hooks.setdefault(stage_name, {}).setdefault(when, []).append(hook)
 
-    def run(self, ctx: StageContext) -> list[StageResult]:
+    def run(self, ctx) -> list[StageResult]:
         """Run all stages in order, returning a list of :class:`StageResult`.
 
         Returns early after the first failing stage.  Before- and after-hooks
@@ -175,7 +116,11 @@ class StageRunner:
         results: list[StageResult] = []
         for stage in self._stages:
             self._fire_hooks(stage.name, 'before', ctx)
-            result = stage.run(ctx)
+            try:
+                result = stage.run(ctx)
+            except Exception as exc:  # noqa: BLE001
+                logger.error('Stage %r failed: %s', stage.name, exc)
+                result = StageResult(name=stage.name, success=False, error=str(exc))
             results.append(result)
             self._fire_hooks(stage.name, 'after', ctx)
             if not result.success:
@@ -209,6 +154,7 @@ class StageRunner:
 # Concrete stage implementations
 # ---------------------------------------------------------------------------
 
+
 class SchemaLoadStage:
     name: str = 'schema_load'
 
@@ -225,12 +171,17 @@ class SchemaLoadStage:
                 ctx.postprocessing_schema = schema
             else:
                 raise ValueError(f'Unknown schema type: {self._schema_type}')
-            return StageResult(name=f'{self.name} for {self._schema_type}', success=True, data=schema)
+            return StageResult(
+                name=f'{self.name} for {self._schema_type}', success=True, data=schema
+            )
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             print(traceback.format_exc())
             logger.error('Schema load failed: %s', msg)
-            return StageResult(name=f'{self.name} for {self._schema_type}', success=False, error=msg)
+            return StageResult(
+                name=f'{self.name} for {self._schema_type}', success=False, error=msg
+            )
+
 
 class ExtractionSchemaLoadStage:
     """Fetch the extraction JSON schema from a schema source and store it in context.
@@ -469,9 +420,7 @@ class ExportToNOMADStage:
 
     name: str = 'export_to_nomad'
 
-    def __init__(
-        self, exporter: Callable[[Any], Any] | None = None
-    ) -> None:
+    def __init__(self, exporter: Callable[[Any], Any] | None = None) -> None:
         self._exporter = exporter
 
     def run(self, ctx: StageContext) -> StageResult:
@@ -485,6 +434,7 @@ class ExportToNOMADStage:
             msg = str(exc)
             logger.error('Export to NOMAD failed: %s', msg)
             return StageResult(name=self.name, success=False, error=msg)
+
 
 class ArchiveShapingStage:
     """Apply an optional archive shaper callable to the postprocessed data.

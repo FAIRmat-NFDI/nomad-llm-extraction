@@ -6,9 +6,16 @@ ExtractionPipeline and any downstream consumers.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
+
+
+class DataclassInstance(Protocol):
+    from dataclasses import Field
+
+    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
 
 
 class PromptConfig(BaseModel):
@@ -39,6 +46,19 @@ class SchemaSourceConfig(BaseModel):
     inline_schema: dict[str, Any] | None = None
 
 
+@runtime_checkable
+class Stage(Protocol):
+    """A single named unit of pipeline work.
+
+    Implementations must expose a ``name`` attribute and a ``run`` method that
+    accepts a :class:`StageContext` and returns a :class:`StageResult`.
+    """
+
+    name: str
+
+    def run(self, ctx: StageContext) -> StageResult: ...
+
+
 class StageHookConfig(BaseModel):
     """Configuration for a hook attached to a named pipeline stage."""
 
@@ -56,7 +76,56 @@ class StageResult(BaseModel):
     error: str | None = None
 
 
+@dataclass
+class DefaultStageContext:
+    """Default context dataclass used by the pipeline if no custom context factory is provided."""
+
+    pass
+
+
+@dataclass
+class StageContext:
+    """Mutable state shared between pipeline stages.
+
+    Stages read inputs from *ctx* and write their outputs back into it so that
+    subsequent stages and hooks can access the accumulated data.
+
+    Attributes:
+        text: The raw input text to extract from.
+        extraction_schema: JSON schema loaded by
+            :class:`ExtractionSchemaLoadStage` and used for prompt + LLM call.
+        postprocessing_schema: JSON schema loaded by
+            :class:`PostprocessingSchemaLoadStage` and passed to the postprocessor.
+        prompt: Prompt string built by :class:`PromptBuildStage`.
+        raw_output: Raw LLM output string (JSON) set by :class:`LLMCallStage`.
+        extracted_data: Parsed Python object set by :class:`ParseResponseStage`.
+        postprocessed_data: Data after optional postprocessing set by
+            :class:`PostprocessingStage`.
+        archive_data: Data after optional archive shaping set by
+            :class:`ArchiveShapingStage`.
+        metadata: Free-form dict for carrying auxiliary data (e.g. timing,
+            token counts, validation errors) without polluting typed fields.
+    """
+
+    text: str
+    extraction_schema: dict[str, Any] | None = None
+    postprocessing_schema: dict[str, Any] | None = None
+    prompt: str | None = None
+    raw_output: str | None = None
+    extracted_data: Any = None
+    postprocessed_data: Any = None
+    archive_data: Any = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class PipelineResult(BaseModel):
+    success: bool
+    stages: list[StageResult] = Field(default_factory=list)
+    ctx: dict = Field(default_factory=dict)
+    error: str | None = None
+
+
+class ExtractionPipelineResult(PipelineResult):
     """Aggregated result returned by ExtractionPipeline.run()."""
 
     success: bool

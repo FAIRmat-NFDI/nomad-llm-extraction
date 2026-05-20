@@ -15,7 +15,9 @@ Quickstart::
 
 from nomad_llm_extraction.pipeline.extraction_pipeline import (
     ExtractionPipeline,
+    ExtractionPipeline2,
     LLMEngine,
+    Pipeline,
     SchemaSource,
 )
 from nomad_llm_extraction.pipeline.models import (
@@ -32,7 +34,9 @@ from nomad_llm_extraction.pipeline.models import (
 # time. They remain fully accessible via `from nomad_llm_extraction.pipeline
 # import InlineSchemaSource` or attribute access.
 _SCHEMA_SOURCES: dict[str, object] = {}
-_SCHEMA_SOURCES_NAMES = frozenset({'InlineSchemaSource', 'NomadSchemaSource', 'SchemaOptimizer'})
+_SCHEMA_SOURCES_NAMES = frozenset(
+    {'InlineSchemaSource', 'NomadSchemaSource', 'SchemaOptimizer'}
+)
 
 
 def __getattr__(name: str) -> object:
@@ -46,11 +50,13 @@ def __getattr__(name: str) -> object:
             _SCHEMA_SOURCES['NomadSchemaSource'] = _ss.NomadSchemaSource
             _SCHEMA_SOURCES['SchemaOptimizer'] = _ss.SchemaOptimizer
         return _SCHEMA_SOURCES[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 __all__ = [
     'ExtractionPipeline',
+    'ExtractionPipeline2',
+    'Pipeline',
     'InlineSchemaSource',
     'LLMEngine',
     'ModelConfig',

@@ -31,20 +31,29 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from nomad_llm_extraction.pipeline.models import PipelineResult, PromptConfig
+from typing_extensions import override
+
+from nomad_llm_extraction.pipeline.models import (
+    DataclassInstance,
+    DefaultStageContext,
+    ExtractionPipelineResult,
+    PipelineResult,
+    PromptConfig,
+    Stage,
+    StageContext,
+    StageResult,
+)
 from nomad_llm_extraction.pipeline.stages import (
-    SchemaLoadStage,
     LLMCallStage,
     ParseResponseStage,
     PostprocessingStage,
     PromptBuildStage,
-    StageContext,
     StageHook,
     StageRunner,
     ValidationStage,
-    ExportToNOMADStage,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +78,7 @@ class LLMEngine(Protocol):
     ) -> str: ...
 
 
-class ExtractionPipeline:
+class ExtractionPipeline_old:
     """Pipeline that extracts structured data from plain text using an LLM.
 
     All heavy dependencies are injected so that the pipeline can be used
@@ -139,7 +148,7 @@ class ExtractionPipeline:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, text: str) -> PipelineResult:
+    def run(self, text: str) -> ExtractionPipelineResult:
         """Run the full extraction pipeline on *text*.
 
         Returns a :class:`PipelineResult` regardless of whether individual
@@ -149,14 +158,18 @@ class ExtractionPipeline:
         Visualizers are called after the pipeline completes regardless of
         success or failure.
         """
-        ctx = StageContext(extraction_schema=self.extraction_schema, postprocessing_schema=self.postprocessing_schema, text=text)
+        ctx = StageContext(
+            extraction_schema=self.extraction_schema,
+            postprocessing_schema=self.postprocessing_schema,
+            text=text,
+        )
         runner = self._build_runner()
         stage_results = runner.run(ctx)
 
         # Determine the first failed stage (if any) for error reporting.
         failed = next((r for r in stage_results if not r.success), None)
         if failed is not None:
-            result = PipelineResult(
+            result = ExtractionPipelineResult(
                 success=False,
                 raw_llm_output=ctx.raw_output,
                 stages=stage_results,
@@ -165,7 +178,7 @@ class ExtractionPipeline:
             self._run_visualizers(result)
             return result
 
-        result = PipelineResult(
+        result = ExtractionPipelineResult(
             success=True,
             raw_llm_output=ctx.raw_output,
             extracted_data=ctx.extracted_data,
@@ -195,9 +208,137 @@ class ExtractionPipeline:
             runner.add_hook(stage_name, when, hook)
         return runner
 
+    def _run_visualizers(self, result: ExtractionPipelineResult) -> None:
+        for visualizer in self.visualizers:
+            try:
+                visualizer(result)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning('Visualizer %r raised: %s', visualizer, exc)
+
+
+class Pipeline:
+    def __init__(
+        self,
+        stages: list[Stage] | None = None,
+        stage_hooks: list[StageHookSpec] | None = None,
+        visualizers: list[Callable[[PipelineResult], None]] | None = None,
+        ctx_factory: type[DataclassInstance] | None = None,
+    ):
+        self.stages = stages or []
+        self.stage_hooks = stage_hooks or []
+        self.ctx_factory = ctx_factory or DefaultStageContext
+        self.visualizers = visualizers or []
+
+    def _build_runner(self) -> StageRunner:
+        runner = StageRunner()
+        for stage in self.stages:
+            runner.add_stage(stage)
+        for stage_name, when, hook in self.stage_hooks:
+            runner.add_hook(stage_name, when, hook)
+        return runner
+
+    def _run(self, ctx) -> tuple[list[StageResult], StageResult | None]:
+        runner = self._build_runner()
+        stage_results = runner.run(ctx)
+        failed = next((r for r in stage_results if not r.success), None)
+        return stage_results, failed
+
+    def get_result(self, ctx, stage_results, failed) -> PipelineResult:
+        result = PipelineResult(success=True, stages=stage_results, ctx=asdict(ctx))
+        if failed is not None:
+            result.success = False
+            result.error = failed.error
+        return result
+
+    def run(self, ctx=None) -> PipelineResult:
+        ctx = ctx or self.ctx_factory()
+        stage_results, failed = self._run(ctx)
+        result = self.get_result(ctx, stage_results, failed)
+        self._run_visualizers(result)
+        return result
+
     def _run_visualizers(self, result: PipelineResult) -> None:
         for visualizer in self.visualizers:
             try:
                 visualizer(result)
             except Exception as exc:  # noqa: BLE001
                 logger.warning('Visualizer %r raised: %s', visualizer, exc)
+
+
+class ExtractionPipeline(Pipeline):
+    def __init__(
+        self,
+        engine: LLMEngine,
+        extraction_schema: dict[str, Any],
+        postprocessing_schema: dict[str, Any] | None = None,
+        prompt_config: PromptConfig | None = None,
+        validators: list[Any] | None = None,
+        visualizers: list[Any] | None = None,
+        stage_hooks: list[StageHookSpec] | None = None,
+        postprocessor: Callable[[Any, dict[str, Any] | None], Any] | None = None,
+        archive_shaper: Callable[[Any], Any] | None = None,
+    ) -> None:
+        self.engine = engine
+        self.extraction_schema = extraction_schema
+        self.postprocessing_schema = postprocessing_schema
+        self.prompt_config = prompt_config or PromptConfig()
+        self.validators = validators or []
+        self.visualizers = visualizers or []
+        self._stage_hooks: list[StageHookSpec] = stage_hooks or []
+        self.postprocessor = postprocessor
+        self.archive_shaper = archive_shaper
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def run(self, text: str | None = None) -> ExtractionPipelineResult:
+        """Run the full extraction pipeline on *text*.
+
+        Returns a :class:`PipelineResult` regardless of whether individual
+        stages succeed or fail — exceptions are captured and stored in the
+        result rather than propagating to the caller.
+
+        Visualizers are called after the pipeline completes regardless of
+        success or failure.
+        """
+        ctx = StageContext(
+            extraction_schema=self.extraction_schema,
+            postprocessing_schema=self.postprocessing_schema,
+            text=text,
+        )
+        stage_results, failed = self._run(ctx)
+        result = self.get_result(ctx, stage_results, failed)
+        self._run_visualizers(result)
+        return result
+
+    @override
+    def get_result(self, ctx, stage_results, failed) -> ExtractionPipelineResult:
+        if failed is not None:
+            result = ExtractionPipelineResult(
+                success=False,
+                raw_llm_output=ctx.raw_output,
+                stages=stage_results,
+                error=failed.error,
+            )
+        else:
+            result = ExtractionPipelineResult(
+                success=True,
+                raw_llm_output=ctx.raw_output,
+                extracted_data=ctx.extracted_data,
+                postprocessed_data=ctx.postprocessed_data,
+                archive_data=ctx.archive_data,
+                stages=stage_results,
+            )
+        return result
+
+    def _build_runner(self) -> StageRunner:
+        """Construct a :class:`StageRunner` wired with all pipeline stages and hooks."""
+        runner = StageRunner()
+        runner.add_stage(PromptBuildStage(self.prompt_config))
+        runner.add_stage(LLMCallStage(self.engine))
+        runner.add_stage(ParseResponseStage())
+        runner.add_stage(ValidationStage(self.validators))
+        runner.add_stage(PostprocessingStage(self.postprocessor))
+        for stage_name, when, hook in self._stage_hooks:
+            runner.add_hook(stage_name, when, hook)
+        return runner

@@ -2,7 +2,7 @@ from post_proc_pipeline import build_pipeline
 from pre_proc_schema import get_schema
 
 from nomad_llm_extraction.pipeline import (
-    ExtractionPipeline,
+    ExtractionPipeline2,
     NomadSchemaSource,
     PromptConfig,
 )
@@ -48,7 +48,7 @@ exclude = [
 if __name__ == '__main__':
     with open('text.txt') as f:
         text = f.read()
-    # text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45) '
+    text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45) '
 
     extraction_schema = NomadSchemaSource(
         'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell',
@@ -72,7 +72,7 @@ if __name__ == '__main__':
         return proc.apply(cells, schema)
 
     engine = LiteLLMEngine(model_name='claude-4-sonnet-20250514')
-    pipeline = ExtractionPipeline(
+    pipeline = ExtractionPipeline2(
         engine=engine,
         extraction_schema=extraction_schema,
         postprocessing_schema=postprocess_schema,
