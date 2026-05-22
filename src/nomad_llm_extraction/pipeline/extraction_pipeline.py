@@ -34,7 +34,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from typing_extensions import override
+from temporalio import workflow
 
 from nomad_llm_extraction.pipeline.models import (
     DataclassInstance,
@@ -237,6 +237,17 @@ class Pipeline:
             runner.add_hook(stage_name, when, hook)
         return runner
 
+    def get_temporal_activities(self) -> dict[str, Callable[..., Any]]:
+        from temporalio import activity
+
+        temporal_activities = {}
+        for stage in self.stages:
+            for func in stage.__dict__.values():
+                if hasattr(func, '__name__'):
+                    wrapped_activity = activity.defn(name=func.__name__)(func)
+                    temporal_activities[func.__name__] = wrapped_activity
+        return temporal_activities
+
     def _run(self, ctx) -> tuple[list[StageResult], StageResult | None]:
         runner = self._build_runner()
         stage_results = runner.run(ctx)
@@ -263,6 +274,18 @@ class Pipeline:
                 visualizer(result)
             except Exception as exc:  # noqa: BLE001
                 logger.warning('Visualizer %r raised: %s', visualizer, exc)
+
+
+@workflow.defn(name='pipeline_workflow')
+class PipelineWorkflow:
+    @workflow.run
+    async def run(self, pipeline: Pipeline, ctx=None) -> PipelineResult:
+        """Run all stages in order, returning a list of :class:`StageResult`.
+
+        Returns early after the first failing stage.  Before- and after-hooks
+        for the failing stage are still fired.
+        """
+        return pipeline.run(ctx)
 
 
 class ExtractionPipeline(Pipeline):
@@ -311,7 +334,6 @@ class ExtractionPipeline(Pipeline):
         self._run_visualizers(result)
         return result
 
-    @override
     def get_result(self, ctx, stage_results, failed) -> ExtractionPipelineResult:
         if failed is not None:
             result = ExtractionPipelineResult(

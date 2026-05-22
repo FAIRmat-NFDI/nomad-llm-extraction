@@ -189,11 +189,11 @@ def merge_all_of_lim(schema, mschema=None, limit_depth=False, proc_schemas=[]):
     return schema
 
 
-def remove_null_anyof(schema):
+def _remove_null_anyof(schema):
     """Recursively removes {'type': 'null'} from anyOf lists"""
     if isinstance(schema, dict):
         if 'anyOf' in schema:
-            anyOf = remove_null_anyof(
+            anyOf = _remove_null_anyof(
                 [
                     i
                     for i in schema.pop('anyOf', [])
@@ -204,23 +204,27 @@ def remove_null_anyof(schema):
                 schema.update(anyOf[0])
             else:
                 schema['anyOf'] = anyOf
-        return {k: remove_null_anyof(v) for k, v in schema.items()}
+        return {k: _remove_null_anyof(v) for k, v in schema.items()}
     elif isinstance(schema, list):
-        return [remove_null_anyof(i) for i in schema]
+        return [_remove_null_anyof(i) for i in schema]
     return schema
 
-def resolve_schema(schema, remove_defs=False, resolve_allOf=False, remove_null_anyof=False):
+
+def resolve_schema(
+    schema, remove_defs=False, resolve_allOf=False, remove_null_anyof=False
+):
     """
     Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
     """
     if remove_null_anyof:
-        schema = remove_null_anyof(schema)
+        schema = _remove_null_anyof(schema)
     schema = dict(jsonref.replace_refs(schema, jsonschema=True, proxies=False))
     if remove_defs and '$defs' in schema:
         del schema['$defs']
     if resolve_allOf:
         schema = merge_all_of(deepcopy(schema))
     return json.loads(json.dumps(schema))
+
 
 def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
     schema_url = f'{NOMAD_URL}schemas/{m_def}?format=jsonschema'
@@ -235,10 +239,14 @@ def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
             f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
         )
 
+
 def get_name_from_id(section_id):
     return section_id.split('@')[0].split('/')[-1]
 
-def prune_schema(data: dict[str, Any], exclude: list, by: Literal['$id','path','key']='$id')-> dict[str, Any]:
+
+def prune_schema(
+    data: dict[str, Any], exclude: list, by: Literal['$id', 'path', 'key'] = '$id'
+) -> dict[str, Any]:
     if by == '$id':
         return remove_sections(data, exclude)
     elif by == 'path':
@@ -247,6 +255,7 @@ def prune_schema(data: dict[str, Any], exclude: list, by: Literal['$id','path','
         return remove_keys_recursive(data, exclude)
     else:
         raise ValueError(f'Invalid value for "by": {by}')
+
 
 def remove_sections(data, sections_to_remove):
     """
@@ -287,6 +296,7 @@ def remove_sections(data, sections_to_remove):
                 new_data.append(remove_sections(item, sections_to_remove))
         data = new_data
     return data
+
 
 def remove_keys_recursive(data, keys_to_remove):
     """

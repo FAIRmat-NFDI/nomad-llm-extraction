@@ -35,14 +35,15 @@ Example usage::
 """
 
 from __future__ import annotations
-from copy import deepcopy
+
 from collections.abc import Callable
-from typing import Any, Literal
+from copy import deepcopy
+from typing import Any
 
 from nomad_llm_extraction.transform.utils import (
     get_nomad_schema,
-    resolve_schema,
     prune_schema,
+    resolve_schema,
 )
 
 # Type alias for the optimizer hook.
@@ -52,8 +53,8 @@ SchemaOptimizer = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 class SchemaSource:
-
-    def __init__(self,
+    def __init__(
+        self,
         optimizer: SchemaOptimizer | None = None,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
@@ -68,9 +69,12 @@ class SchemaSource:
         self._remove_null_anyof = remove_null_anyof
         self._exclude = exclude
         self._multi_instance_field = multi_instance_field
+
     def get_schema(self) -> dict[str, Any]:
         if self._schema is None:
-            raise NotImplementedError("Subclasses must set self._schema before calling get_schema()")
+            raise NotImplementedError(
+                'Subclasses must set self._schema before calling get_schema()'
+            )
         schema = deepcopy(self._schema)
         if self._exclude is not None:
             schema = prune_schema(schema, self._exclude)
@@ -97,6 +101,7 @@ class SchemaSource:
             }
         return schema
 
+
 class InlineSchemaSource(SchemaSource):
     def __init__(
         self,
@@ -105,8 +110,8 @@ class InlineSchemaSource(SchemaSource):
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
-            exclude: list[str] | None = None,
-            multi_instance_field: str | None = None,
+        exclude: list[str] | None = None,
+        multi_instance_field: str | None = None,
     ) -> None:
         super().__init__(
             optimizer=optimizer,
@@ -117,6 +122,7 @@ class InlineSchemaSource(SchemaSource):
             multi_instance_field=multi_instance_field,
         )
         self._schema = schema
+
 
 class NomadSchemaSource(SchemaSource):
     def __init__(
@@ -141,4 +147,3 @@ class NomadSchemaSource(SchemaSource):
         self._m_def = m_def
         self._unit_value = unit_value
         self._schema = get_nomad_schema(m_def, unit_value=unit_value)
-
