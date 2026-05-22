@@ -9,7 +9,11 @@ from schemas import BatteryData, ExperimentIdentifiers
 from nomad_llm_extraction.pipeline import InlineSchemaSource, Pipeline, PromptConfig
 from nomad_llm_extraction.pipeline.models import StageContext
 from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
-from nomad_llm_extraction.pipeline.stages import build_prompt, json_parse, llm_call
+from nomad_llm_extraction.pipeline.stages import (
+    LLMCallStage,
+    ParseResponseStage,
+    PromptBuildStage,
+)
 
 SYSTEM_PROMPT = (
     'You are an expert scientific data extractor. Extract structured information from research papers.\n'
@@ -21,6 +25,10 @@ SYSTEM_PROMPT = (
 INSTRUCTION_TEXT = 'Extract each experiment.'
 
 
+def build_prompt(text_context: str) -> str:
+    return f"""{SYSTEM_PROMPT}\nExtract each experiment.\nTEXT:\n{text_context}"""
+
+
 @dataclass
 class IndentifiersStageContext:
     text: str
@@ -29,10 +37,6 @@ class IndentifiersStageContext:
     prompt: str | None = None
     raw_output: str | None = None
     extracted_data: Any = None
-
-
-def test_a(b):
-    return b + 1
 
 
 if __name__ == '__main__':
@@ -61,38 +65,31 @@ if __name__ == '__main__':
             system_prompt='List unique identifiers for every battery cell described.',
             instruction_text='',
         )
-        stages = {
-            'build_prompt': build_prompt,
-            'llm_call': llm_call,
-            'json_parse': json_parse,
-        }
-        identifier_pipeline = Pipeline(stages=stages)
-        identifier_ctx = StageContext(
-            text=text,
-            extraction_schema=identifiers_schema,
-            prompt_config=identifier_prompt_config,
-            engine=engine,
+        stages = [
+            PromptBuildStage(identifier_prompt_config),
+            LLMCallStage(engine),
+            ParseResponseStage(),
+        ]
+        identifier_pipeline = Pipeline(
+            stages=stages, ctx_factory=IndentifiersStageContext
         )
-        id_result = identifier_pipeline.run(identifier_ctx)
+        id_result = identifier_pipeline.run(
+            IndentifiersStageContext(text=text, extraction_schema=identifiers_schema)
+        )
         all_results.append(id_result)
         cell_ids = id_result.ctx['extracted_data'].get('identifiers', ['default']) or [
             'default'
         ]
-        extraction_stages = {
-            'build_prompt': build_prompt,
-            'llm_call': llm_call,
-            'json_parse': json_parse,
-        }
+        extraction_stages = [
+            PromptBuildStage(extraction_prompt_config),
+            LLMCallStage(engine),
+            ParseResponseStage(),
+        ]
         extraction_pipeline = Pipeline(stages=extraction_stages)
         all_experiments = {'identifiers': cell_ids}
         for cell_id in cell_ids:
             text_context = f'Extract ONLY for: "{cell_id}"\n---\n{text}'
-            ctx = StageContext(
-                text=text_context,
-                extraction_schema=extraction_schema,
-                prompt_config=extraction_prompt_config,
-                engine=engine,
-            )
+            ctx = StageContext(text=text_context, extraction_schema=extraction_schema)
             result = extraction_pipeline.run(ctx)
             all_results.append(result)
             extracted = result.ctx['extracted_data']
@@ -102,8 +99,8 @@ if __name__ == '__main__':
         print(format_exc())
     else:
         print('Extraction successful')
-        with open('battery_extracted_2.json', 'w') as f:
+        with open('battery_extracted.json', 'w') as f:
             json.dump(all_experiments, f, indent=2)
     finally:
-        with open('battery_extraction_results_2.pkl', 'wb') as f:
+        with open('battery_extraction_results.pkl', 'wb') as f:
             pickle.dump(all_results, f)

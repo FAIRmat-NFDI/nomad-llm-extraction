@@ -15,10 +15,8 @@ Quickstart::
 
 from nomad_llm_extraction.pipeline.extraction_pipeline import (
     ExtractionPipeline,
-    ExtractionPipeline_old,
     LLMEngine,
     Pipeline,
-    SchemaSource,
 )
 from nomad_llm_extraction.pipeline.models import (
     ModelConfig,
@@ -55,7 +53,6 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     'ExtractionPipeline',
-    'ExtractionPipeline_old',
     'Pipeline',
     'InlineSchemaSource',
     'LLMEngine',

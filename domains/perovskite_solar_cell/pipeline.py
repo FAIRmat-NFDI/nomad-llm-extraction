@@ -87,13 +87,13 @@ if __name__ == '__main__':
     if result.success:
         processed_cells = result.postprocessed_data
 
-    with open('extracted_null_4.pkl', 'wb') as f:
+    with open('extracted_null_5.pkl', 'wb') as f:
         # json.dump(extracted, f, indent=2)
         import pickle
 
         pickle.dump(result, f)
     try:
-        with open('extracted_null_4.json', 'w') as f:
+        with open('extracted_null_5.json', 'w') as f:
             import json
 
             json.dump(processed_cells, f, indent=2)

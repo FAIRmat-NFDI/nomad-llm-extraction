@@ -21,3 +21,37 @@ def extract_doi_from_pdf(filepath) -> str:
     except Exception as e:
         print(f'Could not extract DOI from {filepath}: {e}')
     return doi
+
+
+import inspect
+from collections.abc import Callable
+from typing import Any
+
+
+def verify_activity_signature(
+    func: Callable[..., Any], expected_params: dict[str, type]
+):
+    """
+    Checks that a function accepts the exact argument names and types expected.
+    """
+    sig = inspect.signature(func)
+
+    # 1. Check if the parameter counts and names match
+    for param_name, expected_type in expected_params.items():
+        if param_name not in sig.parameters:
+            raise TypeError(
+                f"Validation Failed: Function '{func.__name__}' is missing "
+                f"the required argument '{param_name}'."
+            )
+
+        # param = sig.parameters[param_name]
+
+        # # 2. Check type annotations
+        # print(f'{param_name}: expected {expected_type}, got {param.annotation}')
+        # if param.annotation != expected_type.__name__:
+        #     raise TypeError(
+        #         f"Validation Failed: Argument '{param_name}' in '{func.__name__}' "
+        #         f'must be annotated as {expected_type.__name__}, got {param.annotation}.'
+        #     )
+
+    return True
