@@ -20,9 +20,11 @@ from nomad_llm_extraction.pipeline.models import (
 from nomad_llm_extraction.pipeline.stages import (
     StageRunner,
     build_prompt,
+    filter_extraction,
     json_parse,
     llm_call,
     run_postprocessing,
+    validate_extraction_with_schema,
 )
 from nomad_llm_extraction.utils.utils import verify_activity_signature
 
@@ -106,6 +108,9 @@ class ExtractionPipeline(Pipeline):
         visualizers: list[Any] | None = None,
         stage_hooks: list[StageHookSpec] | None = None,
         postprocessor: Callable[[Any, dict[str, Any] | None], Any] | None = None,
+        postprocessor_args: list[str] | None = None,
+        filter_func: Callable[..., Any] | None = None,
+        filter_args: list[str] | None = None,
     ) -> None:
         self.engine = engine
         self.extraction_schema = extraction_schema
@@ -114,10 +119,15 @@ class ExtractionPipeline(Pipeline):
         self.visualizers = visualizers or []
         self.stage_hooks: list[StageHookSpec] = stage_hooks or []
         self.postprocessor = postprocessor
+        self.postprocessor_args = postprocessor_args
+        self.filter_func = filter_func
+        self.filter_args = filter_args
         self.stages = {
             'build_prompt': build_prompt,
             'llm_call': llm_call,
             'parse_response': json_parse,
+            'validate_extraction_with_schema': validate_extraction_with_schema,
+            'filtering': filter_extraction,
             'postprocessing': run_postprocessing,
         }
 
@@ -140,6 +150,9 @@ class ExtractionPipeline(Pipeline):
             extraction_schema=self.extraction_schema,
             postprocessing_schema=self.postprocessing_schema,
             postprocessor=self.postprocessor,
+            postprocessor_args=self.postprocessor_args,
+            filter_func=self.filter_func,
+            filter_args=self.filter_args,
             prompt_config=self.prompt_config,
         )
         stage_results, failed = self._run(ctx)
@@ -154,6 +167,7 @@ class ExtractionPipeline(Pipeline):
                 raw_llm_output=ctx.raw_output,
                 stages=stage_results,
                 error=failed.error,
+                ctx=asdict(ctx),
             )
         else:
             result = ExtractionPipelineResult(
@@ -163,5 +177,6 @@ class ExtractionPipeline(Pipeline):
                 postprocessed_data=ctx.postprocessed_data,
                 archive_data=ctx.archive_data,
                 stages=stage_results,
+                ctx=asdict(ctx),
             )
         return result

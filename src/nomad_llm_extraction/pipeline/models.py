@@ -59,13 +59,17 @@ class StageContext:
     optional_params: dict[str, Any] = field(default_factory=dict)
     extraction_schema: dict[str, Any] | None = None
     postprocessing_schema: dict[str, Any] | None = None
+    postprocessor_args: list[str] | None = None
     postprocessor: Callable[[Any, dict[str, Any] | None], Any] | None = None
+    postprocessed_data: Any = None
+    filter_func: Callable[..., Any] | None = None
+    filter_args: list[str] | None = None
     prompt: str | None = None
     raw_output: str | None = None
     extracted_data: Any = None
-    postprocessed_data: Any = None
     archive_data: Any = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    filtered_data: Any = None
 
 
 class DataclassInstance(Protocol):

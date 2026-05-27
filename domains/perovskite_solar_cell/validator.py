@@ -2,6 +2,8 @@ import copy
 import math
 import re
 
+from nomad_llm_extraction.pipeline.models import StageContext, StageResult
+
 
 def remove_pce_check(data: dict) -> dict:
     new_data = {'cells': []}
@@ -33,11 +35,6 @@ def remove_pce_check(data: dict) -> dict:
                 new_data['cells'].append(data['cells'][i])
                 continue
     return new_data
-
-
-def filter_unwanted(data: dict, pdf_text) -> dict:
-    p_data = remove_pce_check(data)
-    return remove_hallucinated_big_four_area(p_data, pdf_text)
 
 
 results = []
@@ -154,3 +151,8 @@ def remove_hallucinated_big_four_area(data, pdf_text):
             if info['status'] == 'hallucination':
                 del cells[i][key]
     return {'cells': cells}
+
+
+def filter_unwanted(data: dict, pdf_text) -> dict:
+    p_data = remove_pce_check(data)
+    return remove_hallucinated_big_four_area(p_data, pdf_text)

@@ -55,16 +55,17 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+import traceback
 from typing import Any, Literal
 
+from nomad_llm_extraction.pipeline.input_sources.paper import parse_text_from_pdf
 from nomad_llm_extraction.pipeline.models import (
-    PromptConfig,
     StageContext,
     StageFunc,
     StageHook,
     StageResult,
 )
+from nomad_llm_extraction.utils.utils import validate_with_schema
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,23 @@ class StageRunner:
 # ---------------------------------------------------------------------------
 
 
+def text_from_pdf(ctx: StageContext, stage_name: str = 'text_from_pdf') -> StageResult:
+    if ctx.pdf_path is None:
+        return StageResult(
+            name=stage_name,
+            success=False,
+            error='Cannot extract text: no PDF path provided',
+        )
+    try:
+        text = parse_text_from_pdf(ctx.pdf_path)
+        ctx.text = text
+        return StageResult(name=stage_name, data=text, success=True)
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        logger.error('Text extraction failed: %s', msg)
+        return StageResult(name=stage_name, success=False, error=msg)
+
+
 def build_prompt(ctx: StageContext, stage_name: str = 'build_prompt') -> StageResult:
     if ctx.extraction_schema is None:
         return StageResult(
@@ -223,50 +241,72 @@ def json_parse(ctx: StageContext, stage_name: str = 'json_parse') -> StageResult
         return StageResult(name=stage_name, success=False, error=msg)
 
 
-class ValidationStage:
-    """Run a list of validator callables as an explicit pipeline stage.
-
-    Each validator receives ``ctx.extracted_data`` and is expected to raise if
-    the data is invalid.  Validator failures are recorded in
-    ``ctx.metadata['validation_errors']`` (a ``{name: error_message}`` dict) and
-    in ``StageResult.data``.
-
-    The stage itself always returns ``success=True`` so that subsequent stages
-    (postprocessing, archive shaping) continue to run regardless of validation
-    outcome.  Hooks registered on the ``'validation'`` stage can inspect
-    ``ctx.metadata['validation_errors']`` to react to failures.
-    """
-
-    name: str = 'validation'
-
-    def __init__(self, validators: list[Callable[[Any], None]] | None = None) -> None:
-        self._validators = validators or []
-
-    def run(self, ctx: StageContext) -> StageResult:
-        errors: dict[str, str] = {}
-        for idx, validator in enumerate(self._validators):
-            vname = getattr(validator, '__name__', f'validator_{idx}')
-            try:
-                validator(ctx.extracted_data)
-            except Exception as exc:  # noqa: BLE001
-                errors[vname] = str(exc)
-        if errors:
-            ctx.metadata['validation_errors'] = errors
+def validate_extraction_with_schema(
+    ctx: StageContext, stage_name: str = 'jsonvalidation'
+) -> StageResult:
+    if ctx.extracted_data is None:
         return StageResult(
-            name=self.name,
-            success=True,
-            data={'validation_errors': errors},
+            name=stage_name,
+            success=False,
+            error='Cannot validate: no extracted data',
         )
+    try:
+        validated, message = validate_with_schema(
+            ctx.extracted_data, ctx.extraction_schema
+        )
+        if not validated:
+            return StageResult(name=stage_name, success=False, data=message)
+        return StageResult(name=stage_name, success=True)
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        logger.error('Validation failed: %s', msg)
+        return StageResult(name=stage_name, success=False, error=msg)
 
-def run_postprocessing(ctx: StageContext, stage_name: str = 'postprocessing') -> StageResult:
+
+def get_args(ctx, arg_names: list[str]) -> list[Any]:
+    args = []
+    for arg in arg_names:
+        if not hasattr(ctx, arg):
+            logger.warning('Context is missing expected attribute %r', arg)
+        else:
+            args.append(getattr(ctx, arg, None))
+    return args
+
+
+def filter_extraction(
+    ctx: StageContext, stage_name: str = 'filter_extraction'
+) -> StageResult:
+    if ctx.filter_func is None:
+        return StageResult(
+            name=stage_name,
+            success=True,
+            data='No filter function provided; skipping filtering',
+        )
+    try:
+        args = get_args(ctx, ctx.filter_args or [])
+        ctx.filtered_data = ctx.filter_func(*args)
+        return StageResult(name=stage_name, success=True, data=ctx.filtered_data)
+    except Exception:  # noqa: BLE001
+        # msg = str(exc)
+        msg = traceback.format_exc()
+        logger.error('Filtering failed: %s', msg)
+        return StageResult(name=stage_name, success=False, error=msg)
+
+
+def run_postprocessing(
+    ctx: StageContext, stage_name: str = 'postprocessing'
+) -> StageResult:
     if ctx.postprocessor is None:
         ctx.postprocessed_data = ctx.extracted_data
-        return StageResult(name=stage_name, success=True)
-    try:
-        ctx.postprocessed_data = ctx.postprocessor(
-            ctx.extracted_data, ctx.postprocessing_schema
+        return StageResult(
+            name=stage_name,
+            success=True,
+            data='No postprocessor provided; skipping postprocessing',
         )
-        return StageResult(name=stage_name, success=True)
+    try:
+        args = get_args(ctx, ctx.postprocessor_args or [])
+        ctx.postprocessed_data = ctx.postprocessor(*args)
+        return StageResult(name=stage_name, success=True, data=ctx.postprocessed_data)
     except Exception as exc:  # noqa: BLE001
         msg = str(exc)
         logger.error('Postprocessing failed: %s', msg)

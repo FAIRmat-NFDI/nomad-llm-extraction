@@ -1,3 +1,7 @@
+import hashlib
+from pathlib import Path
+
+from jsonschema import ValidationError, validate
 from nomad.units import ureg as nomad_ureg
 
 
@@ -55,3 +59,30 @@ def verify_activity_signature(
         #     )
 
     return True
+
+
+def get_temporal_activities(stages) -> dict[str, Callable[..., Any]]:
+    from temporalio import activity
+
+    temporal_activities = {}
+    for name, func in stages.items():
+        wrapped_activity = activity.defn(name=name)(func)
+        temporal_activities[name] = wrapped_activity
+    return temporal_activities
+
+
+def validate_with_schema(data, schema) -> tuple[bool, str | None]:
+    try:
+        validate(instance=data, schema=schema)
+    except ValidationError as e:
+        return False, str(e)
+    return True, None
+
+
+def get_hash(filepath: Path | str, mode: str = 'md5') -> str:
+    h = hashlib.new(mode)
+    with open(filepath, 'rb') as file:
+        data = file.read()
+    h.update(data)
+    digest = h.hexdigest()
+    return digest
