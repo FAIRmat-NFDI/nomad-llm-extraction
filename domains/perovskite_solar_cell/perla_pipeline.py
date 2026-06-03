@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 with workflow.unsafe.imports_passed_through():
     import json
+    from dataclasses import dataclass
+    from typing import Any
 
     from perla_activities import (
         PerlaPostProcessingWorkflow,
@@ -31,10 +33,6 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.pipeline.workflow import (
         ExtractionWorkflow,
         ExtractionWorkflowInput,
-    )
-    from nomad_llm_extraction.utils.export_to_nomad import (
-        get_authentication_token,
-        push_to_nomad,
     )
 
 SYSTEM_PROMPT = 'You are a world class AI that excels at extracting data about perovskite solar cells from papers. You only report single junction solar cells and no other types of solar cells. You never come up with data and only state data that have been measured and written in the paper and which you can confidently extract. It is better for you to skip than to report data you are uncertain in. Take care to separate devices. Do not extract data people took from other papers but only data reported for the first time in this paper. Do not convert units yourself and stick to the units reported in the paper. Be careful with decimal points. Do not try to come up with a value by doing maths or any inference. Stick to what is explicitly written. Be careful that the data you put together really belongs to the same device. Do not forget to get all the different cells/devices. There can be many. You can make a guess for dimensionality. Make sure to only use the allowed types and literal values provided in the schema. If there are options, choose one. The device stack has to be listed separately in the layers section of the schema with layer names as the names of the parts of the stack. Do not miss the stack/layers. Make sure to separate deposition steps like thermal annealing and spin coating, etc. Keep to the given schema.'
@@ -61,7 +59,102 @@ all_activities = [
 ]
 
 
-async def run_extraction(pdf_path: str, m_def: str):
+@dataclass
+class PerlaWorkflowInput:
+    pdf_path: str
+    m_def: str
+    model_name: str = 'claude-4-sonnet-20250514'
+
+
+@workflow.defn
+class PerlaCompleteWorkflow:
+    @workflow.run
+    async def run(self, inp: PerlaWorkflowInput) -> dict[str, Any]:
+        extraction_schema_input = NomadSchemaFetchInput(
+            m_def=inp.m_def,
+            unit_value=True,
+            remove_defs=True,
+            resolve_allOf=True,
+            exclude=exclude,
+            multi_instance_field='cells',
+        )
+        extraction_schema = await workflow.execute_activity(
+            get_nomad_schema,
+            extraction_schema_input,
+            start_to_close_timeout=timedelta(seconds=30),
+        )
+        extraction_schema = await workflow.execute_activity(
+            optimize_extraction_schema,
+            args=[extraction_schema, 'cells'],
+            start_to_close_timeout=timedelta(seconds=30),
+        )
+        postprocess_schema = await workflow.execute_activity(
+            get_nomad_schema,
+            NomadSchemaFetchInput(
+                m_def=inp.m_def,
+                remove_defs=True,
+            ),
+            start_to_close_timeout=timedelta(seconds=30),
+        )
+        extraction_workflow_input = ExtractionWorkflowInput(
+            pdf_path=inp.pdf_path,
+            extraction_schema=extraction_schema,
+            pdf_parser_method='pymupdf',
+            system_prompt=SYSTEM_PROMPT,
+            instruction_text=INSTRUCTION_TEXT,
+            llm_engine_config={'model_name': inp.model_name},
+        )
+        extraction = await workflow.execute_child_workflow(
+            ExtractionWorkflow.run,
+            extraction_workflow_input,
+            id='test-pipeline-workflow',
+            task_queue='extraction_pipeline',
+        )
+        postprocess_input = PerlaPostProcessingWorkflowInput(
+            data=extraction,
+            schema=postprocess_schema,
+            text=extraction_workflow_input.instruction_text,
+        )
+        postprocessed_data = await workflow.execute_child_workflow(
+            PerlaPostProcessingWorkflow.run,
+            postprocess_input,
+            id='test-postprocess-workflow',
+            task_queue='extraction_pipeline',
+        )
+        return postprocessed_data
+
+
+async def run_extraction(pdf_path: str, m_def: str, model_name: str):
+    client = await Client.connect('localhost:7233')
+    worker = Worker(
+        client,
+        task_queue='extraction_pipeline',
+        workflows=[
+            ExtractionWorkflow,
+            PerlaPostProcessingWorkflow,
+            PerlaCompleteWorkflow,
+        ],
+        activities=all_activities,
+        activity_executor=ThreadPoolExecutor(
+            max_workers=4
+        ),  # Use threads for activities
+    )
+    worker_task = asyncio.create_task(worker.run())
+
+    workflow_input = PerlaWorkflowInput(
+        pdf_path=pdf_path, m_def=m_def, model_name=model_name
+    )
+    result = await client.execute_workflow(
+        PerlaCompleteWorkflow.run,
+        workflow_input,
+        id='perla-complete-workflow',
+        task_queue='extraction_pipeline',
+    )
+    worker_task.cancel()  # Cleanly shut down the worker after workflow completion
+    return result
+
+
+async def run_extraction_explicit(pdf_path: str, m_def: str):
     client = await Client.connect('localhost:7233')
     worker = Worker(
         client,
@@ -111,7 +204,6 @@ async def run_extraction(pdf_path: str, m_def: str):
     )
     json.dump(extraction_schema, open('extraction_schema.json', 'w'), indent=2)
 
-    # engine_config = {'model_name': 'openai/gpt-5.4-mini-2026-03-17'}
     engine_config = {'model_name': 'claude-4-sonnet-20250514'}
 
     workflow_input = ExtractionWorkflowInput(
