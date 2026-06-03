@@ -125,13 +125,12 @@ async def run_extraction(pdf_path: str, m_def: str):
 
     # Start and wait for the Workflow to complete
     print('Executing workflow...')
-    # extraction = await client.execute_workflow(
-    #     ExtractionWorkflow.run,
-    #     workflow_input,
-    #     id='test-pipeline-workflow',
-    #     task_queue='extraction_pipeline',
-    # )
-    extraction = json.load(open('downloads/temp.json'))
+    extraction = await client.execute_workflow(
+        ExtractionWorkflow.run,
+        workflow_input,
+        id='test-pipeline-workflow',
+        task_queue='extraction_pipeline',
+    )
     print(f'Extraction workflow finished! Raw extraction: {extraction}')
 
     postprocess_input = PerlaPostProcessingWorkflowInput(
