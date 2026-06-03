@@ -19,7 +19,7 @@ Example Usage:
 
 import logging
 import os
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -87,7 +87,7 @@ class LiteLLMEngine(StructuredLLMEngine):
             litellm.api_key = api_key
 
     def generate(
-        self, prompt: str, json_schema: str, optional_params: dict = {}
+        self, prompt: str, json_schema: str | dict[str, Any], optional_params: dict = {}
     ) -> str:
         from litellm import completion
 

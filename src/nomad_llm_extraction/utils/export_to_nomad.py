@@ -79,3 +79,52 @@ def push_to_nomad(
             )
             logger.error(f'Response:{res.json()}')
             raise Exception('Upload failed, missing upload_id in response')
+
+
+def process_to_nomad(m_def, data, doi, model_name, multi_instance_field=None):
+    """Wraps the transformed data in the specific NOMAD schema envelope."""
+    doi_url = 'https://www.doi.org/' + doi
+    # Run the transformation    output_entries = []
+
+    # The input is usually a dict with "cells": [...]
+    output_entries = []
+    if multi_instance_field and multi_instance_field in data:
+        for instance in data[multi_instance_field]:
+            entry = {
+                'data': {
+                    'm_def': m_def,
+                    'DOI_number': doi_url,
+                    'extraction_metadata': {
+                        'model': model_name,
+                        'model_version': model_name,
+                    },
+                    **instance,  # Unpack the processed instance data here
+                }
+            }
+            output_entries.append(entry)
+
+    return output_entries
+
+
+def upload_extraction_to_nomad(
+    m_def: str,
+    data: dict[str, Any],
+    doi: str,
+    model_name: str,
+    multi_instance_field: str | None = None,
+    entry_name_format: str | None = None,
+    upload_id: str | None = None,
+):
+    token = get_authentication_token()
+    if not token:
+        logger.error('Failed to get authentication token, cannot upload to NOMAD')
+        return
+
+    entries = process_to_nomad(m_def, data, doi, model_name, multi_instance_field)
+
+    entry_name_format = (
+        f'{doi.replace("/", "_")}_{model_name}_' + '{{index}}'
+        if entry_name_format is None
+        else entry_name_format
+    )
+    push_to_nomad(entry_name_format, entries, token, upload_id=upload_id)

@@ -61,7 +61,7 @@ class PDFParser:
 
     def __init__(
         self,
-        parse_method: str = 'pypdf',
+        parse_method: str = 'pymupdf',
         cache_dir: str | Path | None = None,
         use_cache: bool = True,
     ):
@@ -105,8 +105,3 @@ class PDFParser:
         except Exception as e:
             logger.error(f'PDFParser failed for {path_obj}: {e}')
             return None
-
-
-def parse_text_from_pdf(pdf_path: str | Path, method: str = 'pypdf') -> str | None:
-    parser = PDFParser(parse_method=method)
-    return parser.parse_pdf(pdf_path)

@@ -3,6 +3,39 @@ from copy import deepcopy
 from nomad_llm_extraction.transform.json_transformer import ProcessingPipeline
 from nomad_llm_extraction.transform.utils import remove_keys_recursive, remove_path_keys
 
+exclude = [
+    'nomad.datamodel.metainfo.basesections.v1.PublicationReference',
+    'nomad.datamodel.data.EntryData',
+    'perovskite_solar_cell_database.llm_extraction_schema.SectionRevision',
+    'nomad.datamodel.data.ArchiveSection',
+    'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell.extraction_metadata',
+    'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell.layer_order',
+    'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell.DOI_number',
+    'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell.classic_entry',
+    'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell.reviewer_additional_notes',
+    'nomad.datamodel.metainfo.basesections.v1.Component.mass',
+    'nomad.datamodel.metainfo.basesections.v1.Component.mass_fraction',
+    'nomad.datamodel.metainfo.basesections.v1.Component.name',
+    # 'perovskite_solar_cell_database.composition.Impurity',
+    'perovskite_solar_cell_database.composition.PerovskiteAIonComponent.system',
+    'perovskite_solar_cell_database.composition.PerovskiteBIonComponent.system',
+    'perovskite_solar_cell_database.composition.PerovskiteChemicalSection.cas_number',
+    'perovskite_solar_cell_database.composition.PerovskiteChemicalSection.iupac_name',
+    'perovskite_solar_cell_database.composition.PerovskiteChemicalSection.smiles',
+    'perovskite_solar_cell_database.composition.PerovskiteCompositionSection.composition_estimate',
+    'perovskite_solar_cell_database.composition.PerovskiteCompositionSection.long_form',
+    'perovskite_solar_cell_database.composition.PerovskiteCompositionSection.short_form',
+    'perovskite_solar_cell_database.composition.PerovskiteIonSection.source_compound_cas_number',
+    'perovskite_solar_cell_database.composition.PerovskiteIonSection.source_compound_iupac_name',
+    'perovskite_solar_cell_database.composition.PerovskiteIonSection.source_compound_molecular_formula',
+    'perovskite_solar_cell_database.composition.PerovskiteIonSection.source_compound_smiles',
+    'perovskite_solar_cell_database.composition.PerovskiteIonComponent.system',
+    'perovskite_solar_cell_database.composition.PerovskiteXIonComponent.system',
+    'nomad.datamodel.metainfo.basesections.v1.SystemComponent.system',
+    # 'perovskite_solar_cell_database.llm_extraction_schema.LightSource.lamp',
+    # 'perovskite_solar_cell_database.llm_extraction_schema.LightSource.type',
+    # 'perovskite_solar_cell_database.llm_extraction_schema.Solute.concentration_unit'
+]
 KEY_MAPPING = {
     'bandgap': 'band_gap',
     'PCE_at_the_start_of_the_experiment': 'PCE_at_start',
@@ -158,7 +191,7 @@ def pre_update_unit_value_schema(jsobj, path, unit):
     return jsobj
 
 
-def get_schema(schema):
+def get_schema(schema, multi_instance_field=None):
     proc_pipeline = ProcessingPipeline(
         {
             'rename': [
@@ -190,21 +223,17 @@ def get_schema(schema):
     )
     schema = proc_pipeline.apply(schema, proc_type='schema')
     schema = remove_keys_recursive(schema, ['$id', 'label'])
+    path_keys_to_remove = [
+        'properties.stability.properties.type',
+        'properties.stability.properties.lamp',
+    ]
+    if multi_instance_field is not None:
+        path_keys_to_remove = [
+            f'properties.{multi_instance_field}.items.{key}'
+            for key in path_keys_to_remove
+        ]
     schema = remove_path_keys(
         schema,
-        [
-            'properties.stability.properties.type',
-            'properties.stability.properties.lamp',
-        ],
+        path_keys_to_remove,
     )
-    # schema = {
-    #     'type': 'object',
-    #     'properties': {
-    #         'cells': {
-    #             'type': 'array',
-    #             'items': schema,
-    #             'description': 'List of extracted solar cells',
-    #         }
-    #     },
-    # }
     return schema
