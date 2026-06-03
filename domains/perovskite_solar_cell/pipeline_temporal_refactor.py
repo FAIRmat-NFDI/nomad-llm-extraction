@@ -1,22 +1,27 @@
+import asyncio
 import json
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from post_proc_pipeline import build_pipeline
 from pre_proc_schema import get_schema
+from temporalio.client import Client
+from temporalio.worker import Worker
 from validator import filter_unwanted
 
-from nomad_llm_extraction.pipeline.extraction_pipeline import ExtractionPipeline
 from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
 from nomad_llm_extraction.pipeline.models import PromptConfig
 from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
 from nomad_llm_extraction.pipeline.schema_sources import NomadSchemaSource
-from nomad_llm_extraction.pipeline.temporal_pipeline import (
-    PipelineWorkflow,
-    PipelineWorkflowInput,
-    TemporalExtractionPipeline,
+from nomad_llm_extraction.pipeline.temporal_refactor_pipeline import (
+    RegistryPipelineWorkflow,
+    build_extraction_workflow_payload,
+    run_registered_pipeline_stage,
 )
-from nomad_llm_extraction.utils.export_to_nomad import (
-    get_authentication_token,
-    push_to_nomad,
+from nomad_llm_extraction.pipeline.temporal_refactor_registry import (
+    register_engine_factory,
+    register_runtime_callable_factory,
 )
 from nomad_llm_extraction.utils.utils import get_safe_ctx
 
@@ -61,9 +66,6 @@ exclude = [
 def process_to_nomad(data, doi, model_name):
     """Wraps the transformed data in the specific NOMAD schema envelope."""
     doi_url = 'https://www.doi.org/' + doi
-    # Run the transformation    output_entries = []
-
-    # The input is usually a dict with "cells": [...]
     output_entries = []
     if data and 'cells' in data:
         for cell in data['cells']:
@@ -75,89 +77,108 @@ def process_to_nomad(data, doi, model_name):
                         'model': model_name,
                         'model_version': model_name,
                     },
-                    **cell,  # Unpack the processed cell data here
+                    **cell,
                 }
             }
             output_entries.append(entry)
-
     return output_entries
 
 
-# ...
-# ...
-# async def main(activities):
-#     client = await Client.connect('localhost:7233')
-#     worker = Worker(
-#         client,
-#         task_queue='extraction_pipeline',
-#         workflows=[PipelineWorkflow],
-#         activities=activities,
-#     )
-#     await worker.run()
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-from temporalio.client import Client
-from temporalio.worker import Worker
+def build_perovskite_engine(config: dict[str, Any]) -> LiteLLMEngine:
+    return LiteLLMEngine(model_name=config.get('model_name', 'gpt-4o-mini'))
 
 
-async def run_extraction(pipeline, ctx_args={}):
-    # Connect to the local Temporal cluster (assuming it's running on default port)
+def build_perovskite_filter(config: dict[str, Any]):
+    _ = config
+    return filter_unwanted
+
+
+def build_perovskite_postprocessor(config: dict[str, Any]):
+    _ = config
+    proc = build_pipeline()
+
+    def postprocessor(data, schema):
+        cells = data.get('cells', [data]) if isinstance(data, dict) else data
+        return {'cells': proc.apply(cells, schema)}
+
+    return postprocessor
+
+
+def register_perovskite_runtime_components() -> None:
+    register_engine_factory('perovskite_litellm_engine', build_perovskite_engine)
+    register_runtime_callable_factory('perovskite_filter', build_perovskite_filter)
+    register_runtime_callable_factory(
+        'perovskite_postprocessor', build_perovskite_postprocessor
+    )
+
+
+async def run_extraction(ctx_args: dict[str, Any]):
     client = await Client.connect('localhost:7233')
-    activities = list(pipeline.get_stage_activities().values())
-    # Create the Worker
+    register_perovskite_runtime_components()
+
     worker = Worker(
         client,
         task_queue='extraction_pipeline',
-        workflows=[PipelineWorkflow],
-        activities=activities,
-        activity_executor=ThreadPoolExecutor(
-            max_workers=4
-        ),  # Use threads for activities
+        workflows=[RegistryPipelineWorkflow],
+        activities=[run_registered_pipeline_stage],
+        activity_executor=ThreadPoolExecutor(max_workers=4),
     )
 
-    # Start the Worker in the background so it doesn't block the script
     worker_task = asyncio.create_task(worker.run())
     print('Worker started in the background...')
 
-    # Start and wait for the Workflow to complete
     print('Executing workflow...')
-    pipeline_input = PipelineWorkflowInput(pipeline=pipeline, ctx_args=ctx_args)
+    pipeline_input = build_extraction_workflow_payload(
+        text=ctx_args.get('text', ''),
+        extraction_schema=ctx_args['extraction_schema'],
+        postprocessing_schema=ctx_args.get('postprocessing_schema'),
+        prompt_config=ctx_args['prompt_config'],
+        engine_ref='perovskite_litellm_engine',
+        engine_config=ctx_args.get('engine_config', {}),
+        postprocessor_ref='perovskite_postprocessor',
+        postprocessor_args=['filtered_data', 'postprocessing_schema'],
+        filter_ref='perovskite_filter',
+        filter_args=['extracted_data', 'text'],
+    )
+
     result = await client.execute_workflow(
-        PipelineWorkflow.run,
+        RegistryPipelineWorkflow.run,
         pipeline_input,
-        id='test-pipeline-workflow',
+        id=f'test-pipeline-workflow-{uuid.uuid4()}',
         task_queue='extraction_pipeline',
     )
 
-    print(f'Workflow finished! Result: {result}')
-
-    # Optional: Cleanly shut down the worker once the workflow is done
+    # print(f'Workflow finished! Result: {result}')
     worker_task.cancel()
     return result
 
 
+def enforce_strict_schema(schema):
+    """
+    Recursively searches a JSON schema and adds 'additionalProperties': False
+    to every nested object definition to satisfy OpenAI's strict mode.
+    """
+    if isinstance(schema, dict):
+        # Identify if the current level is an object definition
+        if schema.get('type') == 'object' or 'properties' in schema:
+            schema['additionalProperties'] = False
+
+        # Recursively traverse all child keys (e.g., 'properties', 'items')
+        for key, value in schema.items():
+            schema[key] = enforce_strict_schema(value)
+
+    elif isinstance(schema, list):
+        # Recursively traverse items in a list (e.g., inside 'anyOf' or 'allOf')
+        for i in range(len(schema)):
+            schema[i] = enforce_strict_schema(schema[i])
+
+    return schema
+
+
 if __name__ == '__main__':
-    # processed_cells = json.load(open('extracted_null_5.json'))
-    # doi = '10.1002/adfm.202517729'
-    # nomad_entries = process_to_nomad(
-    #     processed_cells, doi, model_name='claude-4-sonnet-20250514'
-    # )
-    # with open('nomad_entries.json', 'w') as f:
-    #     json.dump(nomad_entries, f, indent=2)
-    # entry_name_format = doi.replace('/', '--') + '-cell-{index}'
-    # push_to_nomad(
-    #     entry_name_format,
-    #     nomad_entries,
-    #     get_authentication_token(),
-    #     'dFoC11rYSaqGEjX7ZWCGNg',
-    # )
-    # p
     pdf_parser = PDFParser()
     PDF_PATH = 'downloads/10.1002--adfm.202517729.pdf'
     text = pdf_parser.parse_pdf(PDF_PATH)
-    # with open('text.txt') as f:
-    #     text = f.read()
     text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45) '
 
     extraction_schema = NomadSchemaSource(
@@ -170,67 +191,44 @@ if __name__ == '__main__':
         multi_instance_field='cells',
     ).get_schema()
     json.dump(extraction_schema, open('extraction_schema.json', 'w'), indent=2)
+    extraction_schema = enforce_strict_schema(extraction_schema)
     postprocess_schema = NomadSchemaSource(
         'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell',
         remove_defs=True,
     ).get_schema()
     json.dump(postprocess_schema, open('postprocess_schema.json', 'w'), indent=2)
-    proc = build_pipeline()
 
-    def postprocessor(data, schema):
-        cells = data.get('cells', [data]) if isinstance(data, dict) else data
-        return {'cells': proc.apply(cells, schema)}
-
-    # engine = LiteLLMEngine(model_name='claude-4-sonnet-20250514')
-    engine = LiteLLMEngine(model_name='gpt-4o-mini')
-
-    # pipeline = ExtractionPipeline(
-    #     engine=engine,
-    #     extraction_schema=extraction_schema,
-    #     postprocessing_schema=postprocess_schema,
-    #     prompt_config=PromptConfig(
-    #         system_prompt=SYSTEM_PROMPT,
-    #         instruction_text=INSTRUCTION_TEXT,
-    #     ),
-    #     postprocessor=postprocessor,
-    #     postprocessor_args=['filtered_data', 'postprocessing_schema'],
-    #     filter_func=filter_unwanted,
-    #     filter_args=['extracted_data', 'text'],
-    # )
-
-    # result = pipeline.run(text)
-    pipeline = TemporalExtractionPipeline(
-        engine=engine,
-        extraction_schema=extraction_schema,
-        postprocessing_schema=postprocess_schema,
-        prompt_config=PromptConfig(
-            system_prompt=SYSTEM_PROMPT,
-            instruction_text=INSTRUCTION_TEXT,
-        ),
-        postprocessor=postprocessor,
-        postprocessor_args=['filtered_data', 'postprocessing_schema'],
-        filter_func=filter_unwanted,
-        filter_args=['extracted_data', 'text'],
+    result = asyncio.run(
+        run_extraction(
+            {
+                'text': text,
+                'extraction_schema': extraction_schema,
+                'postprocessing_schema': postprocess_schema,
+                'prompt_config': PromptConfig(
+                    system_prompt=SYSTEM_PROMPT,
+                    instruction_text=INSTRUCTION_TEXT,
+                ),
+                'engine_config': {
+                    # 'model_name': 'claude-4-sonnet-20250514',
+                    'model_name': 'gpt-4o-mini',
+                },
+            }
+        )
     )
-    ctx_args = {'text': text}
-    ctx = pipeline.get_ctx(ctx_args)
-    json.dump(get_safe_ctx(ctx), open('ctx.json', 'w'), indent=2)
-    p
-    result = asyncio.run(run_extraction(pipeline, ctx_args={'text': text}))
-    print(result)
-    result.ctx = json.loads(get_safe_ctx(result.ctx))
-    with open('extracted_null_5.pkl', 'wb') as f:
-        # json.dump(extracted, f, indent=2)
+
+    # print(result)
+    # result.ctx = json.loads(get_safe_ctx(result.ctx))
+
+    with open('extracted_null_5.pkl', 'wb') as pkl_file:
         import pickle
 
-        pickle.dump(result, f)
+        pickle.dump(result, pkl_file)
+
     if result.success:
         processed_cells = result.postprocessed_data
 
     try:
-        with open('extracted_null_5.json', 'w') as f:
-            import json
-
-            json.dump(processed_cells, f, indent=2)
+        with open('extracted_null_5.json', 'w') as json_file:
+            json.dump(processed_cells, json_file, indent=2)
     except Exception as e:
         print(f'Error parsing extraction as JSON: {e}')

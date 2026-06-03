@@ -1,25 +1,46 @@
+from __future__ import annotations
+
 import json
+import logging
+import traceback
+from collections import OrderedDict
+from typing import Any, Literal
 
-from post_proc_pipeline import build_pipeline
-from pre_proc_schema import get_schema
-from validator import filter_unwanted
+from temporalio import workflow
 
-from nomad_llm_extraction.pipeline.extraction_pipeline import ExtractionPipeline
-from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
-from nomad_llm_extraction.pipeline.models import PromptConfig
-from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
-from nomad_llm_extraction.pipeline.schema_sources import NomadSchemaSource
-from nomad_llm_extraction.pipeline.temporal_pipeline import (
-    PipelineWorkflow,
-    PipelineWorkflowInput,
-    TemporalExtractionPipeline,
-)
-from nomad_llm_extraction.utils.export_to_nomad import (
-    get_authentication_token,
-    push_to_nomad,
-)
-from nomad_llm_extraction.utils.utils import get_safe_ctx
+logger = logging.getLogger(__name__)
+import os
 
+with workflow.unsafe.imports_passed_through():
+    import json
+    from dataclasses import asdict
+
+    from post_proc_pipeline import build_pipeline
+    from pre_proc_schema import get_schema
+    from validator import filter_unwanted
+
+    from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
+    from nomad_llm_extraction.pipeline.models import (
+        ExtractionPipelineResult,
+        PromptConfig,
+        StageContext,
+        StageResult,
+    )
+    from nomad_llm_extraction.pipeline.registry_config import STAGES_REGISTRY
+    from nomad_llm_extraction.pipeline.registry_funcs import (
+        register_processor_func,
+        register_stage_func,
+    )
+    from nomad_llm_extraction.pipeline.schema_sources import NomadSchemaSource
+    from nomad_llm_extraction.pipeline.temporal_pipeline3 import (
+        PipelineWorkflow,
+        PipelineWorkflowInput,
+    )
+    from nomad_llm_extraction.utils.export_to_nomad import (
+        get_authentication_token,
+        push_to_nomad,
+    )
+    from nomad_llm_extraction.utils.utils import get_safe_ctx, get_temporal_activities
 SYSTEM_PROMPT = 'You are a world class AI that excels at extracting data about perovskite solar cells from papers. You only report single junction solar cells and no other types of solar cells. You never come up with data and only state data that have been measured and written in the paper and which you can confidently extract. It is better for you to skip than to report data you are uncertain in. Take care to separate devices. Do not extract data people took from other papers but only data reported for the first time in this paper. Do not convert units yourself and stick to the units reported in the paper. Be careful with decimal points. Do not try to come up with a value by doing maths or any inference. Stick to what is explicitly written. Be careful that the data you put together really belongs to the same device. Do not forget to get all the different cells/devices. There can be many. You can make a guess for dimensionality. Make sure to only use the allowed types and literal values provided in the schema. If there are options, choose one. The device stack has to be listed separately in the layers section of the schema with layer names as the names of the parts of the stack. Do not miss the stack/layers. Make sure to separate deposition steps like thermal annealing and spin coating, etc. Keep to the given schema.'
 INSTRUCTION_TEXT = "Extract the data from the text of the paper. Only report data about devices for which you are certain that the extraction you provide is correct. Do not convert any value or unit. Do not forget to fill in the bandgap. Make sure it is correct for the cell to the best of your abilities. If you're not confident, skip it. Always fill the ions section and coefficients for the perovskite material. If it's not stated, you can infer it from the formula. For example, for MAPbI3 you get coefficients 1 for MA, 1 for Pb, and 3 for I."
 
@@ -83,29 +104,94 @@ def process_to_nomad(data, doi, model_name):
     return output_entries
 
 
-# ...
-# ...
-# async def main(activities):
-#     client = await Client.connect('localhost:7233')
-#     worker = Worker(
-#         client,
-#         task_queue='extraction_pipeline',
-#         workflows=[PipelineWorkflow],
-#         activities=activities,
-#     )
-#     await worker.run()
+proc = build_pipeline()
+
+
+def postprocessor(data, schema):
+    cells = data.get('cells', [data]) if isinstance(data, dict) else data
+    return {'cells': proc.apply(cells, schema)}
+
+
+def filter_extraction(
+    ctx: StageContext, stage_name: str = 'filter_extraction'
+) -> tuple[StageResult, StageContext]:
+
+    try:
+        ctx.filtered_data = filter_unwanted(ctx.extracted_data, ctx.text)
+        return StageResult(name=stage_name, success=True, data=ctx.filtered_data), ctx
+    except Exception:  # noqa: BLE001
+        # msg = str(exc)
+        msg = traceback.format_exc()
+        logger.error('Filtering failed: %s', msg)
+        return StageResult(name=stage_name, success=False, error=msg), ctx
+
+
+def run_postprocessing(
+    ctx: StageContext, stage_name: str = 'postprocessing'
+) -> tuple[StageResult, StageContext]:
+    try:
+        ctx.postprocessed_data = run_postprocessing(
+            ctx.filtered_data, ctx.postprocessing_schema
+        )
+        return StageResult(
+            name=stage_name, success=True, data=ctx.postprocessed_data
+        ), ctx
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        logger.error('Postprocessing failed: %s', msg)
+        return StageResult(name=stage_name, success=False, error=msg), ctx
+
+
+def get_result(ctx, stage_results, failed) -> ExtractionPipelineResult:
+    if failed is not None:
+        result = ExtractionPipelineResult(
+            success=False,
+            raw_llm_output=ctx.raw_output,
+            stages=stage_results,
+            error=failed.error,
+            ctx=asdict(ctx),
+        )
+    else:
+        result = ExtractionPipelineResult(
+            success=True,
+            raw_llm_output=ctx.raw_output,
+            extracted_data=ctx.extracted_data,
+            postprocessed_data=ctx.postprocessed_data,
+            archive_data=ctx.archive_data,
+            stages=stage_results,
+            ctx=asdict(ctx),
+        )
+    return result
+
+
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from temporalio.client import Client
 from temporalio.worker import Worker
 
+# at module level in pipeline_3.py, after the function definitions
+with workflow.unsafe.imports_passed_through():
+    from nomad_llm_extraction.pipeline.registry_funcs import (
+        register_processor_func,
+        register_stage_func,
+    )
 
-async def run_extraction(pipeline, ctx_args={}):
+    register_stage_func('filter_extraction', filter_extraction)
+    register_stage_func('run_postprocessing', run_postprocessing)
+    register_processor_func('perla_result', get_result)
+
+
+async def run_extraction(
+    pipeline_input: PipelineWorkflowInput,
+) -> ExtractionPipelineResult:
     # Connect to the local Temporal cluster (assuming it's running on default port)
     client = await Client.connect('localhost:7233')
-    activities = list(pipeline.get_stage_activities().values())
+    # activities = list(get_temporal_activities(STAGES_REGISTRY).values())
+    activities = [(name, func) for name, func in STAGES_REGISTRY.items()]
+    activities = [activity for _, activity in get_temporal_activities(activities)]
     # Create the Worker
+    print('AA', type(pipeline_input.ctx))
     worker = Worker(
         client,
         task_queue='extraction_pipeline',
@@ -122,7 +208,6 @@ async def run_extraction(pipeline, ctx_args={}):
 
     # Start and wait for the Workflow to complete
     print('Executing workflow...')
-    pipeline_input = PipelineWorkflowInput(pipeline=pipeline, ctx_args=ctx_args)
     result = await client.execute_workflow(
         PipelineWorkflow.run,
         pipeline_input,
@@ -137,7 +222,8 @@ async def run_extraction(pipeline, ctx_args={}):
     return result
 
 
-if __name__ == '__main__':
+def main():
+    print(f'Registry Memory ID: {id(STAGES_REGISTRY)}')
     # processed_cells = json.load(open('extracted_null_5.json'))
     # doi = '10.1002/adfm.202517729'
     # nomad_entries = process_to_nomad(
@@ -160,6 +246,10 @@ if __name__ == '__main__':
     #     text = f.read()
     text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45) '
 
+    # register_stage_func('filter_extraction', filter_extraction)
+    # register_stage_func('run_postprocessing', run_postprocessing)
+    # register_processor_func('perla_result', get_result)
+
     extraction_schema = NomadSchemaSource(
         'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell',
         unit_value=True,
@@ -175,62 +265,34 @@ if __name__ == '__main__':
         remove_defs=True,
     ).get_schema()
     json.dump(postprocess_schema, open('postprocess_schema.json', 'w'), indent=2)
-    proc = build_pipeline()
-
-    def postprocessor(data, schema):
-        cells = data.get('cells', [data]) if isinstance(data, dict) else data
-        return {'cells': proc.apply(cells, schema)}
-
-    # engine = LiteLLMEngine(model_name='claude-4-sonnet-20250514')
-    engine = LiteLLMEngine(model_name='gpt-4o-mini')
-
-    # pipeline = ExtractionPipeline(
-    #     engine=engine,
-    #     extraction_schema=extraction_schema,
-    #     postprocessing_schema=postprocess_schema,
-    #     prompt_config=PromptConfig(
-    #         system_prompt=SYSTEM_PROMPT,
-    #         instruction_text=INSTRUCTION_TEXT,
-    #     ),
-    #     postprocessor=postprocessor,
-    #     postprocessor_args=['filtered_data', 'postprocessing_schema'],
-    #     filter_func=filter_unwanted,
-    #     filter_args=['extracted_data', 'text'],
-    # )
-
-    # result = pipeline.run(text)
-    pipeline = TemporalExtractionPipeline(
-        engine=engine,
+    stages = [
+        ('build_prompt', 'build_prompt'),
+        ('llm_call', 'llm_call'),
+        ('json_parse', 'json_parse'),
+        ('validate_extraction_with_schema', 'validate_extraction_with_schema'),
+        ('filtering', 'filter_extraction'),
+        ('postprocessing', 'run_postprocessing'),
+    ]
+    ctx = StageContext(
+        text=text,
+        engine_config={
+            'model_name': 'openai/gpt-5.4-mini-2026-03-17',
+            # 'api_key': os.getenv('OPENAI_API_KEY'),
+            # 'model_name': 'claude-4-sonnet-20250514',
+            # 'api_key': os.getenv('ANTHROPIC_API_KEY'),
+        },
+        prompt_config=PromptConfig(
+            system_prompt=SYSTEM_PROMPT, instruction_text=INSTRUCTION_TEXT
+        ),
         extraction_schema=extraction_schema,
         postprocessing_schema=postprocess_schema,
-        prompt_config=PromptConfig(
-            system_prompt=SYSTEM_PROMPT,
-            instruction_text=INSTRUCTION_TEXT,
-        ),
-        postprocessor=postprocessor,
-        postprocessor_args=['filtered_data', 'postprocessing_schema'],
-        filter_func=filter_unwanted,
-        filter_args=['extracted_data', 'text'],
     )
-    ctx_args = {'text': text}
-    ctx = pipeline.get_ctx(ctx_args)
-    json.dump(get_safe_ctx(ctx), open('ctx.json', 'w'), indent=2)
-    p
-    result = asyncio.run(run_extraction(pipeline, ctx_args={'text': text}))
-    print(result)
-    result.ctx = json.loads(get_safe_ctx(result.ctx))
-    with open('extracted_null_5.pkl', 'wb') as f:
-        # json.dump(extracted, f, indent=2)
-        import pickle
+    print(stages)
+    pipeline_input = PipelineWorkflowInput(
+        stages=stages, ctx=ctx, result_postprocessor_ref='perla_result'
+    )
+    asyncio.run(run_extraction(pipeline_input))
 
-        pickle.dump(result, f)
-    if result.success:
-        processed_cells = result.postprocessed_data
 
-    try:
-        with open('extracted_null_5.json', 'w') as f:
-            import json
-
-            json.dump(processed_cells, f, indent=2)
-    except Exception as e:
-        print(f'Error parsing extraction as JSON: {e}')
+if __name__ == '__main__':
+    main()

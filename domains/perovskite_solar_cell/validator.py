@@ -155,4 +155,5 @@ def remove_hallucinated_big_four_area(data, pdf_text):
 
 def filter_unwanted(data: dict, pdf_text) -> dict:
     p_data = remove_pce_check(data)
+    print(f'After PCE check: {p_data}')
     return remove_hallucinated_big_four_area(p_data, pdf_text)

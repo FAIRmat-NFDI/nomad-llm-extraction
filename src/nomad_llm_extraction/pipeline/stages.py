@@ -209,10 +209,20 @@ def llm_call(ctx: StageContext, stage_name: str = 'llm_call') -> StageResult:
             success=False,
             error='Cannot call LLM: extraction schema not loaded',
         )
+    max_retries = getattr(ctx, 'max_retries', 0)
     try:
         raw = ctx.engine.generate(
             ctx.prompt, ctx.extraction_schema, ctx.optional_params
         )
+        # retry_count = 0
+        # while retry_count <= max_retries:
+        #     raw = ctx.engine.generate(
+        #         ctx.prompt, ctx.extraction_schema, ctx.optional_params
+        #     )
+        #     validated, message = validate_with_schema(
+        #     raw, ctx.extraction_schema
+        #     )
+        #     retry_count += 1
     except Exception as exc:  # noqa: BLE001
         msg = str(exc)
         logger.error('LLM generation failed: %s', msg)
@@ -311,3 +321,4 @@ def run_postprocessing(
         msg = str(exc)
         logger.error('Postprocessing failed: %s', msg)
         return StageResult(name=stage_name, success=False, error=msg)
+

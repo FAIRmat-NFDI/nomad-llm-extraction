@@ -1,4 +1,6 @@
 import hashlib
+import json
+from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
 
 from jsonschema import ValidationError, validate
@@ -61,13 +63,34 @@ def verify_activity_signature(
     return True
 
 
-def get_temporal_activities(stages) -> dict[str, Callable[..., Any]]:
+# def get_temporal_activities(stages) -> dict[str, Callable[..., Any]]:
+#     from temporalio import activity
+
+
+#     temporal_activities = {}
+#     for name, func in stages.items():
+#         try:
+#             wrapped_activity = activity.defn(name=name)(func)
+#         except ValueError as e:
+#             if e.args[0] == 'Function already contains activity definition':
+#                 wrapped_activity = func  # Already decorated, use as is
+#             else:
+#                 raise
+#         temporal_activities[name] = wrapped_activity
+#     return temporal_activities
+def get_temporal_activities(stages) -> list[tuple[str, Callable[..., Any]]]:
     from temporalio import activity
 
-    temporal_activities = {}
-    for name, func in stages.items():
-        wrapped_activity = activity.defn(name=name)(func)
-        temporal_activities[name] = wrapped_activity
+    temporal_activities = []
+    for name, func in stages:
+        try:
+            wrapped_activity = activity.defn(name=name)(func)
+        except ValueError as e:
+            if e.args[0] == 'Function already contains activity definition':
+                wrapped_activity = func  # Already decorated, use as is
+            else:
+                raise
+        temporal_activities.append((name, wrapped_activity))
     return temporal_activities
 
 
@@ -86,3 +109,30 @@ def get_hash(filepath: Path | str, mode: str = 'md5') -> str:
     h.update(data)
     digest = h.hexdigest()
     return digest
+
+
+def safe_asdict(obj):
+    allowed_keys = {
+        f.name
+        for f in fields(obj)
+        if f.metadata.get('serialize', True)  # Defaults to True if no metadata exists
+    }
+
+    return {k: v for k, v in asdict(obj).items() if k in allowed_keys}
+
+
+def safe_json_default(obj):
+    if is_dataclass(obj):
+        return asdict(obj)
+
+    if obj is not None:
+        return f'<unserializable: {type(obj).__name__} > {str(obj).split("at")[0]}>'
+    return None
+
+
+def safe_json_dumps(data):
+    return json.dumps(data, default=safe_json_default, indent=2)
+
+
+def get_safe_ctx(data):
+    return json.loads(safe_json_dumps(data))

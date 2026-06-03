@@ -47,7 +47,12 @@ try:
         namespace='litellm',
     )
 except Exception:
+    print(
+        "Error importing LiteLLM. Make sure it's installed and configured properly if you intend to use it."
+    )
     pass
+import litellm
+from litellm import get_supported_openai_params, supports_response_schema
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +68,6 @@ class StructuredLLMEngine:
 
 class LiteLLMEngine(StructuredLLMEngine):
     def __init__(self, model_name: str, api_url: str | None = None, api_key: str = ''):
-        import litellm
-        from litellm import get_supported_openai_params, supports_response_schema
 
         self.model_name = model_name
         params = get_supported_openai_params(model=model_name)
@@ -90,8 +93,12 @@ class LiteLLMEngine(StructuredLLMEngine):
 
         response_format = {
             'type': 'json_schema',
-            'json_schema': {'schema': json_schema},
-            'strict': True,
+            'json_schema': {
+                'schema': json_schema,
+                'strict': False,
+                'name': 'ResponseSchema',
+            },
+            # 'strict': True,
         }
         params_to_use = {**optional_params}
         for param in optional_params:
