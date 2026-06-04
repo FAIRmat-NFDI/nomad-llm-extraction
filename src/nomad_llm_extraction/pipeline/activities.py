@@ -8,13 +8,39 @@ with workflow.unsafe.imports_passed_through():
     from typing import Any
 
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
-    from nomad_llm_extraction.pipeline.schema_sources import NomadSchemaSource
+    from nomad_llm_extraction.pipeline.schema_sources import (
+        InlineSchemaSource,
+        NomadSchemaSource,
+    )
     from nomad_llm_extraction.utils.export_to_nomad import upload_extraction_to_nomad
     from nomad_llm_extraction.utils.utils import validate_with_schema
 
 # ---------------------------------------------------------------------------
 # parse_text_from_pdf
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class InlineSchemaInput:
+    schema: dict[str, Any]
+    remove_defs: bool = False
+    resolve_allOf: bool = False
+    remove_null_anyof: bool = False
+    exclude: list[str] | None = None
+    multi_instance_field: str | None = None
+
+
+@activity.defn
+async def get_inline_schema(inp: InlineSchemaInput) -> dict[str, Any]:
+    schema_source = InlineSchemaSource(
+        schema=inp.schema,
+        remove_defs=inp.remove_defs,
+        resolve_allOf=inp.resolve_allOf,
+        remove_null_anyof=inp.remove_null_anyof,
+        exclude=inp.exclude,
+        multi_instance_field=inp.multi_instance_field,
+    )
+    return schema_source.get_schema()
 
 
 @dataclass

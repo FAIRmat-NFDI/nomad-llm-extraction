@@ -1,69 +1,27 @@
-"""nomad_llm_extraction.pipeline – public API.
+from nomad_llm_extraction.pipeline.activities import (
+    build_prompt,
+    get_inline_schema,
+    get_nomad_schema,
+    json_parse,
+    llm_call,
+    parse_text_from_pdf,
+    upload_to_nomad,
+    validate_extraction_with_schema,
+)
+from nomad_llm_extraction.pipeline.workflows import ExtractionWorkflow, LLMCallWorkflow
 
-Quickstart::
+BASE_ACTIVITIES = [
+    build_prompt,
+    json_parse,
+    llm_call,
+    validate_extraction_with_schema,
+    parse_text_from_pdf,
+    get_inline_schema,
+    get_nomad_schema,
+    upload_to_nomad,
+]
 
-    from nomad_llm_extraction.pipeline import ExtractionPipeline, PromptConfig, ModelConfig
-
-    pipeline = ExtractionPipeline(
-        engine=my_engine,
-        extraction_schema_source=my_extraction_schema_source,
-        postprocessing_schema_source=my_postprocessing_schema_source,
-        prompt_config=PromptConfig(system_prompt='...', instruction_text='...'),
-    )
-    result = pipeline.run(paper_text)
-"""
-
-
-# from nomad_llm_extraction.pipeline.extraction_pipeline import (
-#     ExtractionPipeline,
-#     LLMEngine,
-#     Pipeline,
-# )
-# from nomad_llm_extraction.pipeline.models import (
-#     ModelConfig,
-#     PipelineResult,
-#     PromptConfig,
-#     SchemaSourceConfig,
-#     StageHookConfig,
-#     StageResult,
-# )
-
-# # InlineSchemaSource, NomadSchemaSource, and SchemaOptimizer are loaded lazily
-# # to avoid pulling in the transform dependency chain (scalpl etc.) at import
-# # time. They remain fully accessible via `from nomad_llm_extraction.pipeline
-# # import InlineSchemaSource` or attribute access.
-# _SCHEMA_SOURCES: dict[str, object] = {}
-# _SCHEMA_SOURCES_NAMES = frozenset(
-#     {'InlineSchemaSource', 'NomadSchemaSource', 'SchemaOptimizer'}
-# )
-
-
-# def __getattr__(name: str) -> object:
-#     if name in _SCHEMA_SOURCES_NAMES:
-#         if not _SCHEMA_SOURCES:
-#             from nomad_llm_extraction.pipeline import (
-#                 schema_sources as _ss,  # noqa: PLC0415
-#             )
-
-#             _SCHEMA_SOURCES['InlineSchemaSource'] = _ss.InlineSchemaSource
-#             _SCHEMA_SOURCES['NomadSchemaSource'] = _ss.NomadSchemaSource
-#             _SCHEMA_SOURCES['SchemaOptimizer'] = _ss.SchemaOptimizer
-#         return _SCHEMA_SOURCES[name]
-#     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
-
-
-# __all__ = [
-#     'ExtractionPipeline',
-#     'Pipeline',
-#     'InlineSchemaSource',
-#     'LLMEngine',
-#     'ModelConfig',
-#     'NomadSchemaSource',
-#     'PipelineResult',
-#     'PromptConfig',
-#     'SchemaOptimizer',
-#     'SchemaSource',
-#     'SchemaSourceConfig',
-#     'StageHookConfig',
-#     'StageResult',
-# ]
+BASE_WORKFLOWS = [
+    LLMCallWorkflow,
+    ExtractionWorkflow,
+]

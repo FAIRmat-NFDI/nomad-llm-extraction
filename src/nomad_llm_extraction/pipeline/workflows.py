@@ -77,8 +77,16 @@ class LLMCallWorkflow:
 
 @dataclass
 class ExtractionWorkflowInput:
-    pdf_path: str
     extraction_schema: dict[str, Any]
+    prompt: str | None = field(
+        default=None
+    )  # Allow prompt to be passed directly to skip prompt building
+    text: str | None = field(
+        default=None
+    )  # Allow text to be passed directly, which can be used if PDF parsing is not needed
+    pdf_path: str | None = field(
+        default=None
+    )  # Path to PDF, optional if text is provided directly
     pdf_parser_method: str = 'pymupdf'  # or 'pymupdf'
     system_prompt: str = ''
     instruction_text: str = ''
@@ -102,61 +110,32 @@ class ExtractionWorkflowOutput:
 class ExtractionWorkflow:
     @workflow.run
     async def run(self, inp: ExtractionWorkflowInput) -> ExtractionWorkflowOutput:
-        # Step 1: Extract text from PDF
-        text = await workflow.execute_activity(
-            parse_text_from_pdf,
-            ParseTextInput(pdf_path=inp.pdf_path, method=inp.pdf_parser_method),
-            start_to_close_timeout=timedelta(seconds=30),
-        )
+        prompt = inp.prompt
+        if not prompt:
+            text = inp.text
+            if not text and inp.pdf_path:
+                # Step 1: Extract text from PDF
+                text = await workflow.execute_activity(
+                    parse_text_from_pdf,
+                    ParseTextInput(pdf_path=inp.pdf_path, method=inp.pdf_parser_method),
+                    start_to_close_timeout=timedelta(seconds=30),
+                )
 
-        if not text:
-            raise ValueError(f'No text extracted from PDF at {inp.pdf_path}.')
-        # text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45)'
-        # Step 2: Build prompt for LLM
-        prompt = await workflow.execute_activity(
-            build_prompt,
-            BuildPromptInput(
-                text=text,
-                extraction_schema=inp.extraction_schema,
-                system_prompt=inp.system_prompt,
-                instruction_text=inp.instruction_text,
-            ),
-            start_to_close_timeout=timedelta(seconds=30),
-        )
+            if not text:
+                raise ValueError(f'No text extracted from PDF at {inp.pdf_path}.')
+            # text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45)'
+            # Step 2: Build prompt for LLM
+            prompt = await workflow.execute_activity(
+                build_prompt,
+                BuildPromptInput(
+                    text=text,
+                    extraction_schema=inp.extraction_schema,
+                    system_prompt=inp.system_prompt,
+                    instruction_text=inp.instruction_text,
+                ),
+                start_to_close_timeout=timedelta(seconds=30),
+            )
 
-        # Step 3: Call LLM to get raw output
-        # raw_output = await workflow.execute_activity(
-        #     llm_call,
-        #     LLMCallInput(
-        #         prompt=prompt,
-        #         extraction_schema=inp.extraction_schema,
-        #         engine_config=inp.llm_engine_config,
-        #         optional_params=inp.llm_engine_optional_params,
-        #     ),
-        #     start_to_close_timeout=timedelta(seconds=300),
-        # )
-
-        # if not raw_output:
-        #     raise ValueError('LLM did not return any output.')
-
-        # extracted_data = await workflow.execute_activity(
-        #     json_parse, raw_output, start_to_close_timeout=timedelta(seconds=30)
-        # )
-
-        # # Step 4: Validate extraction against schema
-        # validation_result = await workflow.execute_activity(
-        #     validate_extraction_with_schema,
-        #     ExtractionValidationInput(
-        #         extracted_data=extracted_data,  # Use the parsed data for validation
-        #         extraction_schema=inp.extraction_schema,
-        #     ),
-        #     start_to_close_timeout=timedelta(seconds=30),
-        # )
-
-        # if not validation_result.validated:
-        #     raise ValueError(
-        #         f'Extraction did not validate against schema: {validation_result.message}'
-        #     )
         retry_count = 0
         retry_prompt = ''
         while retry_count < inp.max_retry_attempts:
