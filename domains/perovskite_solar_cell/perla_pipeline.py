@@ -217,7 +217,6 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
     workflow_input = ExtractionWorkflowInput(
         pdf_path=pdf_path,
         extraction_schema=extraction_schema,
-        pdf_parser_method='pymupdf',
         system_prompt=SYSTEM_PROMPT,
         instruction_text=INSTRUCTION_TEXT,
         llm_engine_config=engine_config,

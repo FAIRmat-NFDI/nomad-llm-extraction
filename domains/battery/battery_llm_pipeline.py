@@ -11,7 +11,6 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.pipeline import BASE_ACTIVITIES, BASE_WORKFLOWS
     from nomad_llm_extraction.pipeline.activities import (
         InlineSchemaInput,
-        ParseTextInput,
         get_inline_schema,
         parse_text_from_pdf,
     )
@@ -67,13 +66,12 @@ class BatteryLLMExtractionWorkflow:
 
         text = await workflow.execute_activity(
             parse_text_from_pdf,
-            ParseTextInput(pdf_path=inp.pdf_path, method='pymupdf'),
+            inp.pdf_path,
             start_to_close_timeout=timedelta(seconds=30),
         )
         identifier_workflow_input = ExtractionWorkflowInput(
             text=text,
             extraction_schema=identifiers_schema,
-            pdf_parser_method='pymupdf',
             system_prompt=ID_SYSTEM_PROMPT,
             instruction_text='',
             llm_engine_config=engine_config,
@@ -109,7 +107,6 @@ class BatteryLLMExtractionWorkflow:
             extraction_workflow_input = ExtractionWorkflowInput(
                 text=text,
                 extraction_schema=battery_extraction_schema,
-                pdf_parser_method='pymupdf',
                 system_prompt=SYSTEM_PROMPT,
                 instruction_text=instruction_text,
                 llm_engine_config=engine_config,

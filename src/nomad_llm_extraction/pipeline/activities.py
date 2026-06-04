@@ -69,16 +69,10 @@ async def get_nomad_schema(inp: NomadSchemaFetchInput) -> dict[str, Any]:
     return schema_source.get_schema()
 
 
-@dataclass
-class ParseTextInput:
-    pdf_path: str
-    method: str = 'pymupdf'
-
-
 @activity.defn
-async def parse_text_from_pdf(inp: ParseTextInput) -> str | None:
-    parser = PDFParser(parse_method=inp.method, use_cache=False)
-    text = parser.parse_pdf(inp.pdf_path)
+async def parse_text_from_pdf(pdf_path: str) -> str | None:
+    parser = PDFParser(use_cache=False)
+    text = parser.parse_pdf(pdf_path)
     return text
 
 

@@ -5,7 +5,6 @@ with workflow.unsafe.imports_passed_through():
         BuildPromptInput,
         ExtractionValidationInput,
         LLMCallInput,
-        ParseTextInput,
         build_prompt,
         json_parse,
         llm_call,
@@ -87,7 +86,6 @@ class ExtractionWorkflowInput:
     pdf_path: str | None = field(
         default=None
     )  # Path to PDF, optional if text is provided directly
-    pdf_parser_method: str = 'pymupdf'  # or 'pymupdf'
     system_prompt: str = ''
     instruction_text: str = ''
     llm_engine_config: dict[str, Any] = field(default_factory=dict)
@@ -117,7 +115,7 @@ class ExtractionWorkflow:
                 # Step 1: Extract text from PDF
                 text = await workflow.execute_activity(
                     parse_text_from_pdf,
-                    ParseTextInput(pdf_path=inp.pdf_path, method=inp.pdf_parser_method),
+                    inp.pdf_path,
                     start_to_close_timeout=timedelta(seconds=30),
                 )
 
