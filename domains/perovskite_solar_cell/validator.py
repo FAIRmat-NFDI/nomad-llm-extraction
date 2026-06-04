@@ -2,8 +2,6 @@ import copy
 import math
 import re
 
-from nomad_llm_extraction.pipeline.models import StageContext, StageResult
-
 
 def remove_pce_check(data: dict) -> dict:
     new_data = {'cells': []}

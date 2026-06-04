@@ -30,9 +30,10 @@ with workflow.unsafe.imports_passed_through():
         parse_text_from_pdf,
         validate_extraction_with_schema,
     )
-    from nomad_llm_extraction.pipeline.workflow import (
+    from nomad_llm_extraction.pipeline.workflows import (
         ExtractionWorkflow,
         ExtractionWorkflowInput,
+        LLMCallWorkflow,
     )
 
 SYSTEM_PROMPT = 'You are a world class AI that excels at extracting data about perovskite solar cells from papers. You only report single junction solar cells and no other types of solar cells. You never come up with data and only state data that have been measured and written in the paper and which you can confidently extract. It is better for you to skip than to report data you are uncertain in. Take care to separate devices. Do not extract data people took from other papers but only data reported for the first time in this paper. Do not convert units yourself and stick to the units reported in the paper. Be careful with decimal points. Do not try to come up with a value by doing maths or any inference. Stick to what is explicitly written. Be careful that the data you put together really belongs to the same device. Do not forget to get all the different cells/devices. There can be many. You can make a guess for dimensionality. Make sure to only use the allowed types and literal values provided in the schema. If there are options, choose one. The device stack has to be listed separately in the layers section of the schema with layer names as the names of the parts of the stack. Do not miss the stack/layers. Make sure to separate deposition steps like thermal annealing and spin coating, etc. Keep to the given schema.'
@@ -104,12 +105,16 @@ class PerlaCompleteWorkflow:
             instruction_text=INSTRUCTION_TEXT,
             llm_engine_config={'model_name': inp.model_name},
         )
-        extraction = await workflow.execute_child_workflow(
+        extraction_output = await workflow.execute_child_workflow(
             ExtractionWorkflow.run,
             extraction_workflow_input,
             id='test-pipeline-workflow',
             task_queue='extraction_pipeline',
         )
+        if extraction_output.err_message:
+            logger.error(f'LLM call failed with error: {extraction_output.err_message}')
+            raise Exception(f'LLM call failed: {extraction_output.err_message}')
+        extraction = extraction_output.extracted_data
         postprocess_input = PerlaPostProcessingWorkflowInput(
             data=extraction,
             schema=postprocess_schema,
@@ -124,12 +129,15 @@ class PerlaCompleteWorkflow:
         return postprocessed_data
 
 
-async def run_extraction(pdf_path: str, m_def: str, model_name: str):
+async def run_extraction(
+    pdf_path: str, m_def: str, model_name: str = 'claude-4-sonnet-20250514'
+):
     client = await Client.connect('localhost:7233')
     worker = Worker(
         client,
         task_queue='extraction_pipeline',
         workflows=[
+            LLMCallWorkflow,
             ExtractionWorkflow,
             PerlaPostProcessingWorkflow,
             PerlaCompleteWorkflow,
@@ -159,7 +167,7 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
     worker = Worker(
         client,
         task_queue='extraction_pipeline',
-        workflows=[ExtractionWorkflow, PerlaPostProcessingWorkflow],
+        workflows=[ExtractionWorkflow, PerlaPostProcessingWorkflow, LLMCallWorkflow],
         activities=all_activities,
         activity_executor=ThreadPoolExecutor(
             max_workers=4
@@ -217,16 +225,18 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
 
     # Start and wait for the Workflow to complete
     print('Executing workflow...')
-    extraction = await client.execute_workflow(
+    extraction_output = await client.execute_workflow(
         ExtractionWorkflow.run,
         workflow_input,
         id='test-pipeline-workflow',
         task_queue='extraction_pipeline',
     )
-    print(f'Extraction workflow finished! Raw extraction: {extraction}')
+    print(
+        f'Extraction workflow finished! Raw extraction: {extraction_output.raw_output}'
+    )
 
     postprocess_input = PerlaPostProcessingWorkflowInput(
-        data=extraction,
+        data=extraction_output.extracted_data,
         schema=postprocess_schema,
         text=workflow_input.instruction_text,
     )
@@ -249,7 +259,9 @@ def main():
     pdf_path = 'downloads/10.1002--adfm.202517729.pdf'
     m_def = 'perovskite_solar_cell_database.llm_extraction_schema.LLMExtractedPerovskiteSolarCell'
 
-    out = asyncio.run(run_extraction(pdf_path, m_def))
+    out = asyncio.run(
+        run_extraction(pdf_path, m_def, model_name='claude-4-sonnet-20250514')
+    )
     json.dump(out, open('final_output.json', 'w'), indent=2)
 
 

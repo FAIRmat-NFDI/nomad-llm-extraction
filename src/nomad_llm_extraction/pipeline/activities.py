@@ -109,9 +109,12 @@ async def llm_call(inp: LLMCallInput) -> str:
 
 
 @activity.defn
-async def json_parse(inp: str) -> dict[str, Any]:
-    extracted = json.loads(inp)
-    return extracted
+async def json_parse(inp: str) -> tuple[bool, dict[str, Any]]:
+    try:
+        extracted = json.loads(inp)
+        return False, extracted
+    except json.JSONDecodeError as e:
+        return True, {'error': f'Failed to parse JSON: {str(e)}'}
 
 
 # ---------------------------------------------------------------------------

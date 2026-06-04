@@ -95,7 +95,7 @@ class LiteLLMEngine(StructuredLLMEngine):
             'type': 'json_schema',
             'json_schema': {
                 'schema': json_schema,
-                'strict': False,
+                'strict': True,
                 'name': 'ResponseSchema',
             },
             # 'strict': True,
