@@ -10,7 +10,7 @@ with workflow.unsafe.imports_passed_through():
 
     from nomad_llm_extraction.pipeline import BASE_ACTIVITIES, BASE_WORKFLOWS
     from nomad_llm_extraction.pipeline.activities import (
-        InlineSchemaInput,
+        InlineSchemaConfig,
         get_inline_schema,
         parse_text_from_pdf,
     )
@@ -64,7 +64,7 @@ class BatteryLLMExtractionWorkflow:
         identifiers_schema = ExperimentIdentifiers.model_json_schema()
         engine_config = {'model_name': inp.model_name}
 
-        text = await workflow.execute_activity(
+        text, doi = await workflow.execute_activity(
             parse_text_from_pdf,
             inp.pdf_path,
             start_to_close_timeout=timedelta(seconds=30),
@@ -94,8 +94,8 @@ class BatteryLLMExtractionWorkflow:
         extraction_results['identifiers'] = cell_ids
         battery_extraction_schema = await workflow.execute_activity(
             get_inline_schema,
-            InlineSchemaInput(
-                schema=battery_schema,
+            InlineSchemaConfig(
+                inline_schema=battery_schema,
                 remove_defs=True,
                 resolve_allOf=True,
                 remove_null_anyof=True,
@@ -156,7 +156,7 @@ async def run_extraction(
 
 
 def main():
-    pdf_path = 'battery_paper.pdf'  # Update with your PDF path
+    pdf_path = 'domains/battery/battery_paper.pdf'  # Update with your PDF path
     model_name = 'claude-4-sonnet-20250514'  # Update with your desired model
     extraction_results = asyncio.run(run_extraction(pdf_path, model_name))
     print(json.dumps(extraction_results, indent=2))

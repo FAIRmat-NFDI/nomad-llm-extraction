@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -8,7 +9,14 @@ import jsonref
 import requests
 from scalpl import Cut
 
-NOMAD_URL = os.environ.get('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/api/v1/')
+try:
+    # NOMAD_URL = os.environ.get('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/api/v1/')
+    NOMAD_URL = os.environ['NOMAD_URL']
+except KeyError:
+    raise KeyError(
+        'NOMAD_URL environment variable not set. Please set it to the base URL of your NOMAD instance. '
+        'For the public NOMAD instance, use https://nomad-lab.eu/prod/v1/api/v1/'
+    )
 
 
 def check_path(c_data, path):

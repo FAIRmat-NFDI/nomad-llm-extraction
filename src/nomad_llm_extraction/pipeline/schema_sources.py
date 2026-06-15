@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
@@ -23,7 +24,7 @@ class SchemaSource:
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
-        exclude: list[str] | None = None,
+        exclude: dict[str, list[str]] | None = None,
         multi_instance_field: str | None = None,
     ) -> None:
         self._schema: dict[str, Any] | None = None
@@ -41,7 +42,8 @@ class SchemaSource:
             )
         schema = deepcopy(self._schema)
         if self._exclude is not None:
-            schema = prune_schema(schema, self._exclude)
+            for prune_type, prune_values in self._exclude.items():
+                schema = prune_schema(schema, prune_values, by=prune_type)
         schema = resolve_schema(
             schema,
             remove_defs=self._remove_defs,
@@ -74,7 +76,7 @@ class InlineSchemaSource(SchemaSource):
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
-        exclude: list[str] | None = None,
+        exclude: dict[str, list[str]] | None = None,
         multi_instance_field: str | None = None,
     ) -> None:
         super().__init__(
@@ -97,7 +99,7 @@ class NomadSchemaSource(SchemaSource):
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
-        exclude: list[str] | None = None,
+        exclude: dict[str, list[str]] | None = None,
         multi_instance_field: str | None = None,
     ) -> None:
         super().__init__(

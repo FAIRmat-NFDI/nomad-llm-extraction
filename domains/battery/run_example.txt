@@ -1,0 +1,72 @@
+Error importing LiteLLM. Make sure it's installed and configured properly if you intend to use it.
+LLM call attempt 1 failed with error: ValidationError: '<UNKNOWN>' is not of type 'number'
+
+Failed validating 'type' in schema['properties']['binder_percentage']:
+    {'description': 'Weight percentage of the binder.',
+     'title': 'Binder Percentage',
+     'type': 'number'}
+
+On instance['binder_percentage']:
+    '<UNKNOWN>'. Retrying... ({'attempt': 1, 'namespace': 'default', 'run_id': '019eb0d5-821d-7320-8260-2304b0e86c43', 'task_queue': 'extraction_pipeline', 'workflow_id': 'extraction_workflow_Cell 1', 'workflow_type': 'ExtractionWorkflow'})
+Extraction successful for cell Cell 1
+LLM call attempt 1 failed with error: ValidationError: '<UNKNOWN>' is not of type 'number'
+
+Failed validating 'type' in schema['properties']['binder_percentage']:
+    {'description': 'Weight percentage of the binder.',
+     'title': 'Binder Percentage',
+     'type': 'number'}
+
+On instance['binder_percentage']:
+    '<UNKNOWN>'. Retrying... ({'attempt': 1, 'namespace': 'default', 'run_id': '019eb0d5-94e0-7082-ac28-fdad35f199b8', 'task_queue': 'extraction_pipeline', 'workflow_id': 'extraction_workflow_Cell 2', 'workflow_type': 'ExtractionWorkflow'})
+Extraction successful for cell Cell 2
+LLM call attempt 1 failed with error: ValidationError: '<UNKNOWN>' is not of type 'number'
+
+Failed validating 'type' in schema['properties']['binder_percentage']:
+    {'description': 'Weight percentage of the binder.',
+     'title': 'Binder Percentage',
+     'type': 'number'}
+
+On instance['binder_percentage']:
+    '<UNKNOWN>'. Retrying... ({'attempt': 1, 'namespace': 'default', 'run_id': '019eb0d5-a9a7-7a56-acde-9c6cb8f651e3', 'task_queue': 'extraction_pipeline', 'workflow_id': 'extraction_workflow_Cell 3', 'workflow_type': 'ExtractionWorkflow'})
+Extraction successful for cell Cell 3
+{
+  "Cell 1": {
+    "active_material": "LiNi0.8Co0.1Mn0.1O2",
+    "battery_types": [
+      "lithium-ion"
+    ],
+    "binder_percentage": 10,
+    "characterization_techniques": [
+      "electrochemical testing"
+    ],
+    "voltage_window_v": "2.8 to 4.3 V"
+  },
+  "Cell 2": {
+    "active_material": "LiFePO4",
+    "battery_types": [
+      "lithium-ion"
+    ],
+    "binder_percentage": 10,
+    "characterization_techniques": [
+      "mass measurement",
+      "thickness measurement"
+    ],
+    "voltage_window_v": "2.0 to 4.0 V"
+  },
+  "Cell 3": {
+    "active_material": "LiCoO2",
+    "battery_types": [
+      "lithium-ion"
+    ],
+    "binder_percentage": 10,
+    "characterization_techniques": [
+      "XRD"
+    ],
+    "voltage_window_v": "0.01 to 3.0 V"
+  },
+  "identifiers": [
+    "Cell 1",
+    "Cell 2",
+    "Cell 3"
+  ]
+}

@@ -1,27 +1,15 @@
-from nomad_llm_extraction.pipeline.activities import (
-    build_prompt,
-    get_inline_schema,
-    get_nomad_schema,
-    json_parse,
-    llm_call,
-    parse_text_from_pdf,
-    upload_to_nomad,
-    validate_extraction_with_schema,
-)
-from nomad_llm_extraction.pipeline.workflows import ExtractionWorkflow, LLMCallWorkflow
+import inspect
 
+from nomad_llm_extraction.pipeline import activities, workflows
+
+# We use list comprehension to find all Temporal activities in the module
 BASE_ACTIVITIES = [
-    build_prompt,
-    json_parse,
-    llm_call,
-    validate_extraction_with_schema,
-    parse_text_from_pdf,
-    get_inline_schema,
-    get_nomad_schema,
-    upload_to_nomad,
+    obj
+    for name, obj in inspect.getmembers(activities, inspect.isroutine)
+    if hasattr(obj, '__temporal_activity_definition')
 ]
-
 BASE_WORKFLOWS = [
-    LLMCallWorkflow,
-    ExtractionWorkflow,
+    obj
+    for name, obj in inspect.getmembers(workflows, inspect.isclass)
+    if hasattr(obj, '__temporal_workflow_definition')
 ]

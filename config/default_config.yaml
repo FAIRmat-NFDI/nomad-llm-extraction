@@ -1,0 +1,35 @@
+system_prompt: |
+  You are a helpful assistant for extracting structured data from scientific papers. 
+  The user will provide you with the content of a scientific paper and a target data schema. 
+  Your task is to extract the relevant information from the paper and populate the schema accurately. 
+  Pay close attention to the details in the paper and ensure that the extracted data is correct and complete.
+
+instruction_text: |
+  Please extract the relevant information from the provided scientific paper and populate the target data schema. 
+  Make sure to follow the structure of the schema and provide accurate and complete information based on the content of the paper. 
+  If certain information is not available in the paper, please leave those fields empty or indicate that they are not applicable.
+
+
+llm_engine_config:
+  model_name: &model 'claude-4-sonnet-20250514'
+
+max_retry_attempts: 3
+
+m_def: &m_def 'nomad.datamodel.results.Catalyst'  # Update with your M def
+schema_config:
+  m_def: *m_def
+  unit_value: False
+  remove_defs: False
+  resolve_allOf: False
+  remove_null_anyof: False
+  exclude: {}
+  multi_instance_field: &multi_instance_field Null
+pdf_path: 'downloads/test_paper.pdf'  # Update with your PDF path
+output_path: 'downloads/test_extraction_result.json'  # Update with your desired output path
+nomad_upload_config:
+  m_def: *m_def
+  extraction_metadata:
+    model_name: *model
+  multi_instance_field: *multi_instance_field
+  entry_name: 'catalyst_extraction'
+  doi: 'test_doi'  # Update with actual DOI if available

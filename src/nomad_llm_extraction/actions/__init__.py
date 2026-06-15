@@ -1,3 +1,3 @@
-from nomad_llm_extraction.actions.simple_action import simple_action_entry_point
+from nomad_llm_extraction.actions.llm_extractor import llm_extractor_action_entry_point
 
-__all__ = ['simple_action_entry_point']
+__all__ = ['llm_extractor_action_entry_point']

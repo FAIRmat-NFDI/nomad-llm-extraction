@@ -39,6 +39,9 @@ dependencies = [
     "pymupdf>=1.27.2.3",
     "diskcache>=5.6.3",
     "rfc3987>=1.3.8",
+    "dacite>=1.9.2",
+    "fire>=0.7.1",
+    "pdf2doi>=1.7",
 ]
 
 [project.urls]
@@ -174,3 +177,5 @@ pythonpath = ["src"]
 skip = [".github/*"]
 
 
+[project.scripts]
+nomad-extract = "nomad_llm_extraction.run:main_cli"

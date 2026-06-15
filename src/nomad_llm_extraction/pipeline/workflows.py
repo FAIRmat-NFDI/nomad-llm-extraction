@@ -4,23 +4,26 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.pipeline.activities import (
         BuildPromptInput,
         ExtractionValidationInput,
+        InlineSchemaConfig,
         LLMCallInput,
+        NomadSchemaConfig,
         build_prompt,
+        get_inline_schema,
+        get_nomad_schema,
         json_parse,
         llm_call,
         parse_text_from_pdf,
         validate_extraction_with_schema,
     )
+    from nomad_llm_extraction.pipeline.models import (
+        ExtractionWorkflowInput,
+        ExtractionWorkflowOutput,
+        GeneralExtractionWorkflowInput,
+        LLMCallOutput,
+    )
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
-
-
-@dataclass
-class LLMCallOutput:
-    extracted_data: dict[str, Any] = field(default_factory=dict)
-    raw_output: str = ''
-    err_message: str | None = field(default=None)
 
 
 @workflow.defn
@@ -74,53 +77,33 @@ class LLMCallWorkflow:
         )
 
 
-@dataclass
-class ExtractionWorkflowInput:
-    extraction_schema: dict[str, Any]
-    prompt: str | None = field(
-        default=None
-    )  # Allow prompt to be passed directly to skip prompt building
-    text: str | None = field(
-        default=None
-    )  # Allow text to be passed directly, which can be used if PDF parsing is not needed
-    pdf_path: str | None = field(
-        default=None
-    )  # Path to PDF, optional if text is provided directly
-    system_prompt: str = ''
-    instruction_text: str = ''
-    llm_engine_config: dict[str, Any] = field(default_factory=dict)
-    llm_engine_optional_params: dict[str, Any] = field(
-        default_factory=dict
-    )  # Add this field for optional LLM parameters
-    max_retry_attempts: int = 3
-
-
-@dataclass
-class ExtractionWorkflowOutput:
-    extracted_data: dict[str, Any] = field(default_factory=dict)
-    raw_output: str = ''
-    err_message: str | None = field(default=None)
-    retry_prompt: str = ''
-    retries: int = 0
-
-
 @workflow.defn
 class ExtractionWorkflow:
     @workflow.run
     async def run(self, inp: ExtractionWorkflowInput) -> ExtractionWorkflowOutput:
+        if not inp.extraction_schema:
+            return ExtractionWorkflowOutput(
+                extracted_data={},
+                raw_output='',
+                err_message='No extraction schema provided.',
+            )
         prompt = inp.prompt
         if not prompt:
             text = inp.text
             if not text and inp.pdf_path:
                 # Step 1: Extract text from PDF
-                text = await workflow.execute_activity(
+                text, doi = await workflow.execute_activity(
                     parse_text_from_pdf,
                     inp.pdf_path,
                     start_to_close_timeout=timedelta(seconds=30),
                 )
 
-            if not text:
-                raise ValueError(f'No text extracted from PDF at {inp.pdf_path}.')
+                if not text:
+                    return ExtractionWorkflowOutput(
+                        extracted_data={},
+                        raw_output='',
+                        err_message=f'No text parsed from PDF:{inp.pdf_path}',
+                    )
             # text = 'bandgaps 1.63 eV (I/Br ratio: 83:17), 1.68 eV (76:24), 1.74 eV (70:30), 1.80 eV (60:40), and 1.85 eV (55:45)'
             # Step 2: Build prompt for LLM
             prompt = await workflow.execute_activity(
@@ -171,4 +154,37 @@ class ExtractionWorkflow:
             err_message='Max retry attempts reached.',
             retry_prompt=retry_prompt,
             retries=retry_count,
+        )
+
+
+@workflow.defn
+class GeneralExtractionWorkflow:
+    @workflow.run
+    async def run(
+        self, inp: GeneralExtractionWorkflowInput
+    ) -> ExtractionWorkflowOutput:
+        if isinstance(inp.schema_config, NomadSchemaConfig):
+            extraction_schema = await workflow.execute_activity(
+                get_nomad_schema,
+                inp.schema_config,
+                start_to_close_timeout=timedelta(seconds=30),
+            )
+        elif isinstance(inp.schema_config, InlineSchemaConfig):
+            extraction_schema = await workflow.execute_activity(
+                get_inline_schema,
+                inp.schema_config,
+                start_to_close_timeout=timedelta(seconds=30),
+            )
+        extraction_workflow_input = ExtractionWorkflowInput(
+            extraction_schema=extraction_schema,
+            text=inp.text,
+            pdf_path=inp.pdf_path,
+            system_prompt=inp.system_prompt,
+            instruction_text=inp.instruction_text,
+            llm_engine_config=inp.llm_engine_config,
+        )
+        return await workflow.execute_child_workflow(
+            ExtractionWorkflow.run,
+            extraction_workflow_input,
+            id='nomad_extraction_workflow',
         )

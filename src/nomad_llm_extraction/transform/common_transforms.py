@@ -12,15 +12,18 @@ def unit_args(section, state):
 
 
 def convert_unit(b_data, path, unit):
+    def convert_item(item, unit):
+        if isinstance(item, dict) and 'value' in item and 'unit' in item:
+            return convert_to_nomad_unit(item['value'], item['unit'], unit)
+        return item
+
     if b_data[path] is None:
         return b_data
     items = b_data[path]
     if isinstance(items, list):
-        items = [
-            convert_to_nomad_unit(item['value'], item['unit'], unit) for item in items
-        ]
+        items = [convert_item(item, unit) for item in items]
     else:
-        items = convert_to_nomad_unit(items['value'], items['unit'], unit)
+        items = convert_item(items, unit)
     b_data[path] = items
     return b_data
 

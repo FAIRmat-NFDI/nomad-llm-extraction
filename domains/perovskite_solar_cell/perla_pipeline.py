@@ -22,7 +22,7 @@ with workflow.unsafe.imports_passed_through():
     from pre_proc_schema import exclude
 
     from nomad_llm_extraction.pipeline.activities import (
-        NomadSchemaFetchInput,
+        NomadSchemaConfig,
         build_prompt,
         get_nomad_schema,
         json_parse,
@@ -71,7 +71,7 @@ class PerlaWorkflowInput:
 class PerlaCompleteWorkflow:
     @workflow.run
     async def run(self, inp: PerlaWorkflowInput) -> dict[str, Any]:
-        extraction_schema_input = NomadSchemaFetchInput(
+        extraction_schema_input = NomadSchemaConfig(
             m_def=inp.m_def,
             unit_value=True,
             remove_defs=True,
@@ -91,7 +91,7 @@ class PerlaCompleteWorkflow:
         )
         postprocess_schema = await workflow.execute_activity(
             get_nomad_schema,
-            NomadSchemaFetchInput(
+            NomadSchemaConfig(
                 m_def=inp.m_def,
                 remove_defs=True,
             ),
@@ -143,9 +143,6 @@ async def run_extraction(
             PerlaCompleteWorkflow,
         ],
         activities=all_activities,
-        activity_executor=ThreadPoolExecutor(
-            max_workers=4
-        ),  # Use threads for activities
     )
     worker_task = asyncio.create_task(worker.run())
 
@@ -169,16 +166,13 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
         task_queue='extraction_pipeline',
         workflows=[ExtractionWorkflow, PerlaPostProcessingWorkflow, LLMCallWorkflow],
         activities=all_activities,
-        activity_executor=ThreadPoolExecutor(
-            max_workers=4
-        ),  # Use threads for activities
     )
 
     # Start the Worker in the background so it doesn't block the script
     worker_task = asyncio.create_task(worker.run())
     print('Worker started in the background...')
 
-    extraction_schema_input = NomadSchemaFetchInput(
+    extraction_schema_input = NomadSchemaConfig(
         m_def=m_def,
         unit_value=True,
         remove_defs=True,
@@ -202,7 +196,7 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
     )
     postprocess_schema = await client.execute_activity(
         get_nomad_schema,
-        NomadSchemaFetchInput(
+        NomadSchemaConfig(
             m_def=m_def,
             remove_defs=True,
         ),

@@ -3,8 +3,11 @@ import json
 from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
 
+import pdf2doi
+import yaml
 from jsonschema import ValidationError, validate
 from nomad.units import ureg as nomad_ureg
+
 
 
 def convert_to_nomad_unit(value, from_unit, to_unit):
@@ -136,3 +139,9 @@ def safe_json_dumps(data):
 
 def get_safe_ctx(data):
     return json.loads(safe_json_dumps(data))
+
+
+def load_yaml_config(config_path: str) -> dict[str, Any]:
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    return config
