@@ -151,7 +151,7 @@ class ExtractPDFWorkflow:
                 parsed_pdf = await workflow.execute_activity(
                     get_text_from_pdf,
                     ActionFileHandlerInput(
-                        upload_id=data.upload_id, user_id=data.user_id, pdf=pdf
+                        upload_id=data.upload_id, user_id=data.user_id, name=pdf
                     ),
                     start_to_close_timeout=timedelta(seconds=120),
                     retry_policy=retry_policy,

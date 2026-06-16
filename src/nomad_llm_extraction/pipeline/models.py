@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, Field, SecretStr, field_serializer
-from typing_extensions import TypedDict
 
 
 class SchemaConfig(BaseModel):

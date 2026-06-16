@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
@@ -11,9 +10,7 @@ from nomad_llm_extraction.transform.utils import (
     resolve_schema,
 )
 
-# Type alias for the optimizer hook.
-# A SchemaOptimizer receives a resolved JSON-schema dict and returns a
-# (possibly modified) JSON-schema dict.  Identity lambdas are acceptable.
+# Define a type for schema optimization functions
 SchemaOptimizer = Callable[[dict[str, Any]], dict[str, Any]]
 
 

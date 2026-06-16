@@ -17,7 +17,7 @@ with workflow.unsafe.imports_passed_through():
         NomadUnitConversionInput,
         UploadToNomadInput,
     )
-    from nomad_llm_extraction.pipeline.schema_sources import (
+    from nomad_llm_extraction.pipeline.schema_filling.schema_sources import (
         InlineSchemaSource,
         NomadSchemaSource,
     )
@@ -75,6 +75,7 @@ async def get_nomad_schema(inp: NomadSchemaConfig) -> dict[str, Any]:
 
 @activity.defn
 async def parse_text_from_pdf(pdf_path: str) -> tuple[str | None, str | None]:
+    p
     parser = PDFParser(use_cache=False)
     text = parser.parse_pdf(pdf_path)
     doi = extract_doi_from_pdf(pdf_path)

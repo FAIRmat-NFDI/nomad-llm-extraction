@@ -12,8 +12,6 @@ with workflow.unsafe.imports_passed_through():
     from datetime import timedelta
     from typing import Any
 
-    import dacite
-
     from nomad_llm_extraction.pipeline import BASE_ACTIVITIES, BASE_WORKFLOWS
     from nomad_llm_extraction.pipeline.activities import (
         UploadToNomadInput,
