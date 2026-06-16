@@ -27,7 +27,6 @@ from nomad_llm_extraction.transform.json_transformer import (
 from nomad_llm_extraction.transform.utils import (
     check_path,
     delete_section,
-    remove_null_anyof,
     resolve_schema,
 )
 
@@ -104,7 +103,7 @@ def resolved_schema():
 @pytest.fixture(scope='module')
 def perov_resolved_schema():
     with PEROV_SCHEMA_PATH.open() as handle:
-        return remove_null_anyof(resolve_schema(json.load(handle)))
+        return resolve_schema(json.load(handle), remove_null_anyof=True)
 
 
 @pytest.fixture(scope='module')
