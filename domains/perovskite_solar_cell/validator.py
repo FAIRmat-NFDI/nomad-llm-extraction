@@ -2,6 +2,11 @@ import copy
 import math
 import re
 
+"""
+This module contains validation and filtering functions for perovskite solar cell data.
+The main goal is to identify and remove potentially hallucinated values, especially in the key performance metrics (PCE, Jsc, Voc, FF), by cross-referencing with the original PDF text
+"""
+
 
 def remove_pce_check(data: dict) -> dict:
     new_data = {'cells': []}

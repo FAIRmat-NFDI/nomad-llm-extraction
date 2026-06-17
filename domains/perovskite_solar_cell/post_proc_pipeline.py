@@ -1,3 +1,8 @@
+"""
+This module defines the post-processing pipeline for perovskite solar cell data extracted. It replicates the post processing steps defined in the original PERLA codebase,
+but in a more modular and reusable way using the ProcessingPipeline class from nomad_llm_extraction.transform.json_transformer.
+For a deeper understanding of the transformations applied please look at the perla_postproc_tutorial.ipynb notebook, where we go through the transformations. and how to write and use the transform pipeline."""
+
 from nomad_llm_extraction.transform.common_transforms import (
     convert_unit,
     remove_none,

@@ -10,6 +10,17 @@ with workflow.unsafe.imports_passed_through():
     from validator import filter_unwanted
 proc = build_pipeline()
 
+"""
+This module defines Temporal activities and workflows for post-processing extracted data specifically for the PERLA project.
+The main activities include:
+1. optimize_extraction_schema: Optimizes the extraction schema for better performance during post-processing.
+2. postprocessor: Applies a series of post-processing steps to the extracted data using the transformation pipeline defined in post_proc_pipeline.py.
+3. filter_extraction: Filters out potentially hallucinated values from the extracted data by cross-referencing with the original PDF text using functions defined in validator.py.
+
+For each activity, we define input dataclasses to structure the input data.
+
+The PerlaPostProcessingWorkflow orchestrates the execution of the filtering and post-processing activities in sequence.
+"""
 
 @activity.defn
 async def optimize_extraction_schema(

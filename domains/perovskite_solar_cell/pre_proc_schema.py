@@ -1,3 +1,8 @@
+"""
+This module contains the pre-processing schema optimization for the PERLA project.
+It converts the Nomad schema into the schema in th eoriginal PERLA codebase, which is optimized for the post-processing steps we want to apply.
+ This includes renaming fields, adding unit wrappers, and removing unnecessary fields and definitions."""
+
 from copy import deepcopy
 
 from nomad_llm_extraction.transform.json_transformer import ProcessingPipeline
@@ -36,7 +41,12 @@ exclude = {
         # 'perovskite_solar_cell_database.llm_extraction_schema.LightSource.lamp',
         # 'perovskite_solar_cell_database.llm_extraction_schema.LightSource.type',
         # 'perovskite_solar_cell_database.llm_extraction_schema.Solute.concentration_unit'
-    ]
+    ],
+    # 'path': [
+    #     'properties.stability.properties.type',
+    #     'properties.stability.properties.lamp',
+    # ],
+    # 'key': ['$id', 'label'],
 }
 KEY_MAPPING = {
     'bandgap': 'band_gap',
