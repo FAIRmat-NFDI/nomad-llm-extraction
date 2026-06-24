@@ -1,5 +1,6 @@
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from temporalio import workflow
 from temporalio.client import Client
@@ -37,6 +38,9 @@ async def start_worker():
         task_queue='general_extraction_pipeline',
         workflows=BASE_WORKFLOWS,
         activities=BASE_ACTIVITIES,
+        activity_executor=ThreadPoolExecutor(
+            max_workers=10
+        ),  # Adjust max_workers as needed
     )
     worker_task = asyncio.create_task(worker.run())
     return client, worker, worker_task

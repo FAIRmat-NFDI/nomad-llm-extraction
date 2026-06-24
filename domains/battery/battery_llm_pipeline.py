@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -139,6 +141,9 @@ async def run_extraction(
             BatteryLLMExtractionWorkflow,
         ],
         activities=BASE_ACTIVITIES,
+        activity_executor=ThreadPoolExecutor(
+            max_workers=10
+        ),  # Adjust max_workers as needed
     )
     worker_task = asyncio.create_task(worker.run())
 

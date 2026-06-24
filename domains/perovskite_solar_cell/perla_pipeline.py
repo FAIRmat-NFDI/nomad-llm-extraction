@@ -143,6 +143,9 @@ async def run_extraction(
             PerlaCompleteWorkflow,
         ],
         activities=all_activities,
+        activity_executor=ThreadPoolExecutor(
+            max_workers=10
+        ),  # Adjust max_workers as needed
     )
     worker_task = asyncio.create_task(worker.run())
 
@@ -166,6 +169,9 @@ async def run_extraction_explicit(pdf_path: str, m_def: str):
         task_queue='extraction_pipeline',
         workflows=[ExtractionWorkflow, PerlaPostProcessingWorkflow, LLMCallWorkflow],
         activities=all_activities,
+        activity_executor=ThreadPoolExecutor(
+            max_workers=10
+        ),  # Adjust max_workers as needed
     )
 
     # Start the Worker in the background so it doesn't block the script

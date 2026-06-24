@@ -11,7 +11,7 @@ instruction_text: |
 
 
 llm_engine_config:
-  model_name: &model 'claude-4-sonnet-20250514'
+  model_name: &model 'claude-sonnet-4-6'
 
 max_retry_attempts: 3
 

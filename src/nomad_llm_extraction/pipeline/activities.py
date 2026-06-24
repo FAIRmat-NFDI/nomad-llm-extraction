@@ -39,7 +39,7 @@ with workflow.unsafe.imports_passed_through():
 
 
 @activity.defn
-async def get_inline_schema(inp: InlineSchemaConfig) -> dict[str, Any]:
+def get_inline_schema(inp: InlineSchemaConfig) -> dict[str, Any]:
     if inp.inline_schema is not None:
         schema = inp.inline_schema
     elif inp.schema_path is not None:
@@ -59,7 +59,7 @@ async def get_inline_schema(inp: InlineSchemaConfig) -> dict[str, Any]:
 
 
 @activity.defn
-async def get_nomad_schema(inp: NomadSchemaConfig) -> dict[str, Any]:
+def get_nomad_schema(inp: NomadSchemaConfig) -> dict[str, Any]:
 
     schema_source = NomadSchemaSource(
         m_def=inp.m_def,
@@ -74,7 +74,7 @@ async def get_nomad_schema(inp: NomadSchemaConfig) -> dict[str, Any]:
 
 
 @activity.defn
-async def parse_text_from_pdf(pdf_path: str) -> tuple[str | None, str | None]:
+def parse_text_from_pdf(pdf_path: str) -> tuple[str | None, str | None]:
     parser = PDFParser(use_cache=False)
     text = parser.parse_pdf(pdf_path)
     doi = extract_doi_from_pdf(pdf_path)
@@ -87,7 +87,7 @@ async def parse_text_from_pdf(pdf_path: str) -> tuple[str | None, str | None]:
 
 
 @activity.defn
-async def build_prompt(inp: BuildPromptInput) -> str:
+def build_prompt(inp: BuildPromptInput) -> str:
     parts: list[str] = []
     if inp.system_prompt:
         parts.append(inp.system_prompt)
@@ -104,7 +104,7 @@ async def build_prompt(inp: BuildPromptInput) -> str:
 
 
 @activity.defn
-async def llm_call(inp: LLMCallInput) -> str:
+def llm_call(inp: LLMCallInput) -> str:
     from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
 
     llm_engine = LiteLLMEngine(**inp.engine_config.model_dump())
@@ -118,7 +118,7 @@ async def llm_call(inp: LLMCallInput) -> str:
 
 
 @activity.defn
-async def json_parse(inp: str) -> tuple[bool, dict[str, Any]]:
+def json_parse(inp: str) -> tuple[bool, dict[str, Any]]:
     try:
         extracted = json.loads(inp)
         return False, extracted
@@ -132,7 +132,7 @@ async def json_parse(inp: str) -> tuple[bool, dict[str, Any]]:
 
 
 @activity.defn
-async def validate_extraction_with_schema(
+def validate_extraction_with_schema(
     inp: ExtractionValidationInput,
 ) -> ExtractionValidationOutput:
     validated, message = validate_with_schema(inp.extracted_data, inp.extraction_schema)
@@ -140,7 +140,7 @@ async def validate_extraction_with_schema(
 
 
 @activity.defn
-async def upload_to_nomad(inp: UploadToNomadInput) -> None:
+def upload_to_nomad(inp: UploadToNomadInput) -> None:
     upload_extraction_to_nomad(
         m_def=inp.m_def,
         data=inp.data,
@@ -153,7 +153,7 @@ async def upload_to_nomad(inp: UploadToNomadInput) -> None:
 
 
 @activity.defn
-async def convert_nomad_units(inp: NomadUnitConversionInput) -> dict:
+def convert_nomad_units(inp: NomadUnitConversionInput) -> dict:
     return ProcessingPipeline(
         {'unit_conversion': [convert_unit, unit_cond, unit_args]}
     ).apply(inp.data, inp.proc_schema)
