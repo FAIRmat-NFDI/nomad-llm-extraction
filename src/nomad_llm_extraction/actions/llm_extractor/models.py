@@ -6,6 +6,7 @@ ModelName = Literal[
     'gpt-4o',
     # 'gpt-5',  # Uncomment when temperature support is correct in LiteLLM
     'claude-4-sonnet-20250514',
+    'claude-sonnet-4-6',
     #  'meta.llama3-70b-instruct-v1:0',  # Uncomment when someone can test it
 ]  # Restricted set of LLM model names supported.
 
@@ -48,9 +49,13 @@ class ExtractActionWorkflowInput(GeneralExtractionWorkflowInput):
         default=None,
         description='Prefix for the output files generated.',
     )
+    delete_source_pdfs: bool = Field(
+        default=True,
+        description='Whether to delete the source PDF files after processing.',
+    )
 
 
-class ExtractWorkflowInput(BaseModel):
+class LLMExtractWorkflowInput(BaseModel):
     """
     Run this action to extract perovskite solar cells information from all PDFs in a
     project/upload.
@@ -72,11 +77,15 @@ class ExtractWorkflowInput(BaseModel):
     model: ModelName = Field(
         'claude-4-sonnet-20250514', description='LLM model to be used for extraction.'
     )
-    config: str = Field(
-        ...,
-        description=('Path to the configuration file for the extraction pipeline.'),
+    schema_m_def: str = Field(..., description='Nomad Section m_def to be used for extraction.')
+    text: str | None = Field(
+        default=None,
+        description='Text to run the extraction on. If not provided, the action will extract text from all PDFs in the project.',
     )
-
+    delete_source_pdfs: bool = Field(
+        default=True,
+        description='Whether to delete the source PDF files after processing.',
+    )
     @field_serializer('api_token', when_used='json')
     def dump_secret(self, v):
         return v.get_secret_value()

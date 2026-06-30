@@ -6,14 +6,13 @@ from temporalio import activity
 from nomad_llm_extraction.actions.llm_extractor.models import (
     ActionFileHandlerInput,
     CleanupInput,
-    ExtractWorkflowInput,
     ProcessNewFilesInput,
 )
 
 MAX_ATTEMPT_NUM = 100  # attempts to reprocess upload with new entries
 
 
-@activity.defn
+@activity.defn(name='nomad_llm_extraction.get_list_of_pdfs')
 def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
     """
     Find all PDF files in the upload if authorized user has access to the upload.
@@ -40,8 +39,8 @@ def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
     }
 
 
-@activity.defn
-def get_config(input_data: ExtractWorkflowInput):
+@activity.defn(name='nomad_llm_extraction.get_config')
+def get_config(input_data):
     from nomad.actions.manager import get_upload_files
 
     from nomad_llm_extraction.utils.utils import load_yaml_config
@@ -72,7 +71,7 @@ def get_config(input_data: ExtractWorkflowInput):
     )
 
 
-@activity.defn
+@activity.defn(name='nomad_llm_extraction.get_text_from_pdf')
 def get_text_from_pdf(
     input_data: ActionFileHandlerInput,
 ) -> tuple[str | None, str | None]:
@@ -96,36 +95,37 @@ def get_text_from_pdf(
     return text, doi
 
 
-@activity.defn
-def dump_extractions(input_data: ActionFileHandlerInput):
-    from nomad.actions.manager import get_upload_files
+@activity.defn(name='nomad_llm_extraction.dump_extractions')
+async def dump_extractions(input_data: ActionFileHandlerInput):
+    from nomad.actions.manager import get_upload_files, action_instance_artifacts_dir
 
     upload_files = get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
-    fname = f'results/{input_data.name}_extracted-' + '{{index}}.archive.json'
+    temp_dir='temp_results'
+    fname = f'{temp_dir}/{input_data.name}'
     save_paths = []
     extractions = input_data.data or []
     for index, extracted_instance in enumerate(extractions):
-        if not upload_files.raw_path_exists('results'):
-            upload_files.raw_create_directory('results')
+        if not upload_files.raw_path_exists(temp_dir):
+            upload_files.raw_create_directory(temp_dir)
         with upload_files.raw_file(
-            file_path=fname.format(index=index), mode='w', encoding='utf-8'
+            file_path=fname+ f'_{index}.archive.json', mode='w', encoding='utf-8'
         ) as f:
             json.dump(extracted_instance, f, indent=4)
-            save_paths.append(fname.format(index=index))
-
+            save_paths.append(fname + f'_{index}.archive.json')
     return save_paths
 
 
-@activity.defn
+@activity.defn(name='nomad_llm_extraction.process_new_files')
 async def process_new_files(data: ProcessNewFilesInput) -> dict:
     """Process newly created entries in the upload, then return their references."""
-    from nomad.actions.manager import get_upload_files
+    from nomad.actions.manager import get_upload_files, action_instance_artifacts_dir
     from nomad.app.v1.routers.uploads import get_upload_with_read_access
     from nomad.datamodel import User
     from nomad.utils import generate_entry_id
+    from nomad.processing.data import Upload
 
     upload_files = get_upload_files(
         data.upload_id,
@@ -137,7 +137,7 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         return {'refs': [], 'success': False, 'errors': [error_msg]}
 
     file_operations = []
-
+    proc_file_paths = []
     for path in data.results['paths']:
         file_operations.append(
             dict(
@@ -145,17 +145,18 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
                 path=upload_files.raw_file_object(path).os_path,
                 target_dir='results',
                 temporary=False,
-            )
-        )
+            ))
+        proc_file_paths.append([path, path.replace('temp_results/', 'results/')])
 
     # Wait until the upload is not busy
     for i in range(MAX_ATTEMPT_NUM):
-        upload = get_upload_with_read_access(
-            data.upload_id,
-            User(user_id=data.user_id),
-            include_others=True,
-        )
-
+        upload_files = get_upload_files(data.upload_id, data.user_id)
+        if upload_files is None:
+            error_msg = f'Upload files not found or can not be accessed for upload ID: {data.upload_id}'
+            activity.logger.error(error_msg)
+            return {'refs': [], 'success': False, 'errors': [error_msg]}
+        upload = Upload.get(data.upload_id)
+        
         if not upload.process_running:
             break
         else:
@@ -168,27 +169,30 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         )
         activity.logger.error(error_msg)
         return {'refs': [], 'success': False, 'errors': [error_msg]}
-
     handle = upload.process_upload(
         file_operations=file_operations,
         path_filter='results',
         only_updated_files=True,
     )
-
+    
     await handle.result()  # type: ignore
 
     result_entry_refs = []
-
-    for path in data.results['paths']:
-        if upload_files.raw_path_exists(path) and upload_files.raw_path_is_file(path):
+    cleaned_paths = []
+    for temp_file_path, final_file_path in proc_file_paths:
+        if upload_files.raw_path_exists(final_file_path) and upload_files.raw_path_is_file(final_file_path):
             result_entry_refs.append(
-                f'../uploads/{upload.upload_id}/archive/{generate_entry_id(str(upload.upload_id), path)}#/data'
+                f'../uploads/{upload.upload_id}/archive/{generate_entry_id(str(upload.upload_id), final_file_path)}#/data'
             )
-
+            if upload_files.raw_path_exists(temp_file_path):
+                upload_files.delete_rawfiles(temp_file_path)
+                cleaned_paths.append(temp_file_path)
+    if upload_files.raw_path_exists('temp_results') and cleaned_paths == data.results['paths']:
+        upload_files.delete_rawfiles('temp_results')
     return {'refs': result_entry_refs, 'success': True, 'errors': []}
 
 
-@activity.defn
+@activity.defn(name='nomad_llm_extraction.remove_source_pdfs')
 def remove_source_pdfs(input_data: CleanupInput) -> None:
     """
     Remove source PDF files from the upload after extraction.

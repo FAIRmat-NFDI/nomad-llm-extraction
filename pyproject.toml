@@ -70,7 +70,8 @@ extra-index-url = [
 ]
 
 [tool.uv.sources]
-nomad-lab = { git = "https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-FAIR.git" }
+# nomad-lab = { git = "https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-FAIR.git" }
+nomad-lab = { workspace = true }
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -167,7 +168,8 @@ where = ["src"]
 # schema_package_entry_point = "nomad_llm_extraction.schema_packages:schema_package_entry_point"
 app_entry_point = "nomad_llm_extraction.apps:app_entry_point"
 example_upload_entry_point = "nomad_llm_extraction.example_uploads:example_upload_entry_point"
-action_entry_point = "nomad_llm_extraction.actions.llm_extractor:llm_extractor_action_entry_point"
+llm_data_extractor_action = "nomad_llm_extraction.actions:llm_extractor_action_entry_point"
+llm_extractor_schema = "nomad_llm_extraction.schema_packages:llm_extractor"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

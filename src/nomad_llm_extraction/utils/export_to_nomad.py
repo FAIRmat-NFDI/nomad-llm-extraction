@@ -110,6 +110,14 @@ def process_to_nomad(
                 }
             }
             output_entries.append(entry)
+    else:
+        entry = {
+            'data': {
+                **base_data,
+                **data,  # Unpack the processed data here
+            }
+        }
+        output_entries.append(entry)
 
     return output_entries
 

@@ -84,7 +84,7 @@ class LiteLLMEngine(StructuredLLMEngine):
         self.base_url = api_url
 
         if api_key:
-            litellm.api_key = api_key
+            litellm.api_key = api_key if type(api_key) is str else api_key.get_secret_value()
 
     def generate(
         self, prompt: str, json_schema: str | dict[str, Any], optional_params: dict = {}

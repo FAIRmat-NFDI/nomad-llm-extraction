@@ -31,6 +31,27 @@ with workflow.unsafe.imports_passed_through():
     )
     from nomad_llm_extraction.utils.export_to_nomad import process_to_nomad
 
+testing_result = {
+            'result': {
+                'catalyst':[{
+                "data": {
+                    "m_def": "nomad.datamodel.results.Catalyst",
+                    "catalyst_name": "Pt-Ru/Al2O3-X5",
+                    "preparation_method": "wet impregnation",
+                    "catalyst_type": [
+                        "supported metal"
+                    ],
+                    "support": "gamma-alumina",
+                    "characterization_methods": [
+                        "X-ray diffraction (XRD)",
+                        "scanning electron microscopy (SEM)",
+                        "Brunauer-Emmett-Teller (BET)"
+                    ],
+                    "surface_area": 145.5
+                }
+            }]
+        }
+    }
 
 @workflow.defn
 class ExtractionRouterWorkflow:
@@ -42,22 +63,26 @@ class ExtractionRouterWorkflow:
         It first finds all PDF files in the upload, then runs the extraction workflow for each
         of them, and finally processes the extracted data to create new entries in NOMAD.
         """
+        parent_workflow_id = workflow.info().workflow_id
         if not data.text and not data.prompt:
             result = await workflow.execute_child_workflow(
                 ExtractPDFWorkflow.run,
                 data,
-                id='extract-pdf-workflow',
+                id=f'extract-pdf-workflow::{parent_workflow_id}',
             )
         else:
+            print('No PDF files to process, running extraction workflow directly with provided text or prompt.'
+            )
             result = await workflow.execute_child_workflow(
                 ExtractTextWorkflow.run,
                 data,
-                id='extract-text-workflow',
+                id=f'extract-text-workflow::{parent_workflow_id}',
             )
         if result['success'] is False:
             error_msg = f'Extraction workflow failed with errors: {result["errors"]}'
             workflow.logger.error(error_msg)
             return {'refs': [], 'success': False, 'errors': result['errors']}
+        
         processing_input = ProcessNewFilesInput(
             upload_id=data.upload_id,
             user_id=data.user_id,
@@ -66,7 +91,7 @@ class ExtractionRouterWorkflow:
         proccesing_result = await workflow.execute_child_workflow(
             ProcessExtractionsWorkflow.run,
             processing_input,
-            id='process-extractions-workflow',
+            id=f'process-extractions-workflow::{parent_workflow_id}',
         )
         return proccesing_result
 
@@ -85,6 +110,7 @@ class ProcessExtractionsWorkflow:
         result_paths = []
         try:
             for name, extraction in data.results.items():
+                print(f'Processing extraction for {name}:', extraction)
                 save_paths = await workflow.execute_activity(
                     dump_extractions,
                     ActionFileHandlerInput(
@@ -96,6 +122,7 @@ class ProcessExtractionsWorkflow:
                     start_to_close_timeout=timedelta(seconds=60),
                     retry_policy=retry_policy,
                 )
+                print(f'Extraction results for {name} saved to: {save_paths}')
             result_paths.extend(save_paths)
             input_for_processing = ProcessNewFilesInput(
                 upload_id=data.upload_id,
@@ -126,6 +153,7 @@ class ProcessExtractionsWorkflow:
 class ExtractPDFWorkflow:
     @workflow.run
     async def run(self, data: ExtractActionWorkflowInput) -> dict:
+        parent_workflow_id = workflow.info().workflow_id
         errors = []
         extractions = {}
         retry_policy = RetryPolicy(
@@ -173,7 +201,7 @@ class ExtractPDFWorkflow:
                 extraction_result = await workflow.execute_child_workflow(
                     ExtractTextWorkflow.run,
                     single_extraction_input,
-                    id=f'extraction-workflow-{pdf}',
+                    id=f'extraction-workflow-{pdf}::{parent_workflow_id}',
                 )
                 if extraction_result['success'] is False:
                     error_msg = f'LLM extraction workflow failed for PDF {pdf} with errors: {extraction_result["errors"]}'
@@ -209,7 +237,9 @@ class ExtractPDFWorkflow:
 class ExtractTextWorkflow:
     @workflow.run
     async def run(self, data: ExtractActionWorkflowInput):
+        parent_workflow_id = workflow.info().workflow_id
         name = data.name or data.upload_id
+        print(f'Running LLM extraction workflow for {name}')
         errors = []
         retry_policy = RetryPolicy(
             maximum_attempts=3,
@@ -222,12 +252,12 @@ class ExtractTextWorkflow:
         extraction_workflow_input = GeneralExtractionWorkflowInput(**data.model_dump())
         if data.llm_engine_config.api_key is not None:
             extraction_workflow_input.llm_engine_config.api_key = (
-                data.llm_engine_config.api_key.get_secret_value()
+                data.llm_engine_config.api_key
             )
         extraction_result = await workflow.execute_child_workflow(
             GeneralExtractionWorkflow.run,
             extraction_workflow_input,
-            id='extraction-workflow',
+            id=f'extraction-workflow::{parent_workflow_id}',
             retry_policy=retry_policy,
         )
         if extraction_result.err_message:
@@ -235,6 +265,7 @@ class ExtractTextWorkflow:
             workflow.logger.error(error_msg)
             errors.append(error_msg)
             return {'result': {}, 'success': False, 'errors': errors}
+        print(f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}')
         extraction_metadata = create_extraction_metadata(
             data.llm_engine_config.model_name, data.extraction_metadata
         )
@@ -245,6 +276,7 @@ class ExtractTextWorkflow:
             multi_instance_field=extraction_workflow_input.schema_config.multi_instance_field,
             extraction_metadata=extraction_metadata,
         )
+        print(f'Processed extractions ready for NOMAD upload: {processed_extractions}')
         return {
             'result': {name: processed_extractions},
             'success': errors == [],

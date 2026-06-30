@@ -11,7 +11,11 @@ from scalpl import Cut
 
 try:
     # NOMAD_URL = os.environ.get('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/api/v1/')
-    NOMAD_URL = os.environ['NOMAD_URL']
+    NOMAD_URL = os.environ.get(
+        'NOMAD_URL', 'http://localhost:8000/nomad-oasis/api/v1/'
+    ) or os.environ.get('deployment_url')
+    if NOMAD_URL is None:
+        raise KeyError('NOMAD_URL environment variable not set')
 except KeyError:
     raise KeyError(
         'NOMAD_URL environment variable not set. Please set it to the base URL of your NOMAD instance. '

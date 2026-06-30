@@ -15,11 +15,11 @@ class LLMExtractorActionEntryPoint(ActionEntryPoint):
         import inspect
 
         from nomad.actions import Action
-        from perovskite_solar_cell_database.actions.llm_extractor.workflows import (
-            ExtractionRouterWorkflow,
-        )
 
         from nomad_llm_extraction.actions.llm_extractor import activities, workflows
+        from nomad_llm_extraction.actions.llm_extractor.workflows import (
+            ExtractionRouterWorkflow,
+        )
         from nomad_llm_extraction.pipeline import BASE_ACTIVITIES, BASE_WORKFLOWS
 
         ACTION_ACTIVITIES = [
@@ -42,6 +42,6 @@ class LLMExtractorActionEntryPoint(ActionEntryPoint):
 
 
 llm_extractor_action_entry_point = LLMExtractorActionEntryPoint(
-    name='LLMExtractorAction',
+    name='LLMDataExtractorAction',
     description='Extract data from research papers/text in the upload.',
 )
