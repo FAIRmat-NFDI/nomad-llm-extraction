@@ -33,7 +33,7 @@ class ActionFileHandlerInput(BaseModel):
     )
 
 
-class ExtractActionWorkflowInput(GeneralExtractionWorkflowInput):
+class ExtractionWorkflowInput(GeneralExtractionWorkflowInput):
     upload_id: str = Field(
         ...,
         description='Unique identifier for the project associated with the action.',
@@ -55,7 +55,7 @@ class ExtractActionWorkflowInput(GeneralExtractionWorkflowInput):
     )
 
 
-class LLMExtractWorkflowInput(BaseModel):
+class ExtractionActionInput(BaseModel):
     """
     Run this action to extract perovskite solar cells information from all PDFs in a
     project/upload.
@@ -77,7 +77,9 @@ class LLMExtractWorkflowInput(BaseModel):
     model: ModelName = Field(
         'claude-4-sonnet-20250514', description='LLM model to be used for extraction.'
     )
-    schema_m_def: str = Field(..., description='Nomad Section m_def to be used for extraction.')
+    extraction_m_def: str = Field(
+        ..., description='Nomad Section m_def to be used for extraction.'
+    )
     text: str | None = Field(
         default=None,
         description='Text to run the extraction on. If not provided, the action will extract text from all PDFs in the project.',
@@ -86,6 +88,7 @@ class LLMExtractWorkflowInput(BaseModel):
         default=True,
         description='Whether to delete the source PDF files after processing.',
     )
+
     @field_serializer('api_token', when_used='json')
     def dump_secret(self, v):
         return v.get_secret_value()

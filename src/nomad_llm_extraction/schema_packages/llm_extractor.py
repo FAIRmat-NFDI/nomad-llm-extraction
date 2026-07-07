@@ -2,10 +2,10 @@ import pathlib
 from typing import TYPE_CHECKING, get_args
 
 from nomad.actions.manager import get_action_result, get_action_status, start_action
-from nomad.datamodel.data import UseCaseElnCategory, EntryData
+from nomad.datamodel.data import EntryData, UseCaseElnCategory
 from nomad.datamodel.metainfo.annotations import ELNComponentEnum, SectionProperties
-from nomad.datamodel.results import Catalyst
 from nomad.datamodel.metainfo.eln import ELNAnnotation
+from nomad.datamodel.results import Catalyst
 from nomad.metainfo import Quantity, Section, SubSection
 from nomad.metainfo.metainfo import MEnum
 
@@ -17,13 +17,37 @@ from nomad.datamodel.data import ArchiveSection, Schema
 from nomad.metainfo import SchemaPackage
 
 from nomad_llm_extraction.actions.llm_extractor.models import (
-    ExtractActionWorkflowInput,
+    ExtractionWorkflowInput,
     ModelName,
 )
-from nomad_llm_extraction.utils.utils import load_yaml_config
 from nomad_llm_extraction.config import DEFAULT_EXTRACTION_CONFIG
+from nomad_llm_extraction.utils.utils import load_yaml_config
 
 m_package = SchemaPackage()
+
+
+class LLMExtractionOutput(Schema):
+    m_def = Section(
+        label='LLM Extraction Output',
+        categories=[UseCaseElnCategory],
+        a_eln=ELNAnnotation(
+            properties=SectionProperties(
+                order=[
+                    'action_id',
+                    'extracted_data',
+                ]
+            )
+        ),
+    )
+    extracted_data = Quantity(
+        type=EntryData,
+        shape=['*'],
+        description='List of extracted data from the paper',
+    )
+    action_id = Quantity(
+        type=str,
+        description='ID of the LLM Extraction action.',
+    )
 
 
 class LlmDataExtractor(Schema):
@@ -171,7 +195,9 @@ class LlmDataExtractor(Schema):
                     self.action_id,  # pyright: ignore[reportArgumentType]
                     archive.metadata.authors[0].user_id,  # type: ignore
                 )
-                print(f'LLM Extraction action completed with result_refs: {result_refs}')
+                print(
+                    f'LLM Extraction action completed with result_refs: {result_refs}'
+                )
                 if result_refs is not None:
                     if result_refs.get('success'):
                         self.extracted_data = result_refs['refs']
@@ -232,9 +258,9 @@ class LlmDataExtractor(Schema):
                     self.pdfs.append(file_info.path)
                 elif (
                     self.extraction_config_path is not None
-                    and
-                    file_info.path.lower().endswith('.yaml')
-                    and file_info.path.rpartition('/')[-1] == self.extraction_config_path
+                    and file_info.path.lower().endswith('.yaml')
+                    and file_info.path.rpartition('/')[-1]
+                    == self.extraction_config_path
                 ):
                     extraction_config = load_yaml_config(file_info.path)
 
@@ -254,15 +280,11 @@ class LlmDataExtractor(Schema):
                 )
                 extraction_config = DEFAULT_EXTRACTION_CONFIG
 
-            extraction_config['schema_config'].update(
-                {'m_def': self.extraction_m_def}
-            )
+            extraction_config['schema_config'].update({'m_def': self.extraction_m_def})
             extraction_config['llm_engine_config'].update(
                 {'api_key': api_token, 'model': self.model}
             )
-            extraction_config['extraction_metadata'].update(
-                {'model_name': self.model}
-            )
+            extraction_config['extraction_metadata'].update({'model_name': self.model})
             self.trigger_run_action = False
             self.action_status = 'RUNNING'
             # avoiding multiple triggers due to possible race conditions
@@ -280,7 +302,7 @@ class LlmDataExtractor(Schema):
                         'trigger_run_action not found in the archive during reset.'
                     )
 
-            input_data = ExtractActionWorkflowInput(
+            input_data = ExtractionWorkflowInput(
                 upload_id=archive.metadata.upload_id,  # pyright: ignore[reportArgumentType]
                 user_id=archive.metadata.authors[0].user_id,  # type: ignore
                 name=self.output_file_prefix,  # pyright: ignore[reportArgumentType]

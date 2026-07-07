@@ -15,15 +15,21 @@ with workflow.unsafe.imports_passed_through():
         get_text_from_pdf,
         process_new_files,
         remove_source_pdfs,
+        save_extraction_output,
     )
     from nomad_llm_extraction.actions.llm_extractor.models import (
         ActionFileHandlerInput,
         CleanupInput,
-        ExtractActionWorkflowInput,
+        ExtractionActionInput,
+        ExtractionWorkflowInput,
         ProcessNewFilesInput,
     )
     from nomad_llm_extraction.actions.llm_extractor.utils import (
         create_extraction_metadata,
+    )
+    from nomad_llm_extraction.config import (
+        DEFAULT_EXTRACTION_CONFIG,
+        DEFAULT_EXTRACTION_METADATA,
     )
     from nomad_llm_extraction.pipeline.workflows import (
         GeneralExtractionWorkflow,
@@ -32,31 +38,98 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.utils.export_to_nomad import process_to_nomad
 
 testing_result = {
-            'result': {
-                'catalyst':[{
-                "data": {
-                    "m_def": "nomad.datamodel.results.Catalyst",
-                    "catalyst_name": "Pt-Ru/Al2O3-X5",
-                    "preparation_method": "wet impregnation",
-                    "catalyst_type": [
-                        "supported metal"
+    'result': {
+        'catalyst': [
+            {
+                'data': {
+                    'm_def': 'nomad.datamodel.results.Catalyst',
+                    'catalyst_name': 'Pt-Ru/Al2O3-X5',
+                    'preparation_method': 'wet impregnation',
+                    'catalyst_type': ['supported metal'],
+                    'support': 'gamma-alumina',
+                    'characterization_methods': [
+                        'X-ray diffraction (XRD)',
+                        'scanning electron microscopy (SEM)',
+                        'Brunauer-Emmett-Teller (BET)',
                     ],
-                    "support": "gamma-alumina",
-                    "characterization_methods": [
-                        "X-ray diffraction (XRD)",
-                        "scanning electron microscopy (SEM)",
-                        "Brunauer-Emmett-Teller (BET)"
-                    ],
-                    "surface_area": 145.5
+                    'surface_area': 145.5,
                 }
-            }]
-        }
+            }
+        ]
     }
+}
+
+
+@workflow.defn
+class ExtractionActionWorkflow:
+    @workflow.run
+    async def run(self, data: ExtractionActionInput) -> dict:
+        """
+        Run this action to extract perovskite solar cells information from all PDFs in a
+        project/upload.
+
+        It first finds and processes all PDF files in the project using the specified LLM,
+        then creates and processes new entries for each detected solar cell and deletes the
+        source PDF files.
+        """
+        extraction_config = DEFAULT_EXTRACTION_CONFIG
+        extraction_config['schema_config'].update({'m_def': data.extraction_m_def})
+        extraction_config['llm_engine_config'].update(
+            {'api_key': data.api_token, 'model': data.model}
+        )
+        extraction_config['extraction_metadata'].update({'model_name': data.model})
+        # extraction_config.update(**data.model_dump())
+        extraction_workflow_input = ExtractionWorkflowInput(
+            upload_id=data.upload_id,
+            user_id=data.user_id,
+            text=data.text,
+            delete_source_pdfs=data.delete_source_pdfs,
+            **extraction_config,
+        )
+        # extraction_result = await workflow.execute_child_workflow(
+        #     ExtractionRouterWorkflow.run,
+        #     extraction_workflow_input,
+        #     id=f'extraction-router-workflow::{workflow.info().workflow_id}',
+        # )
+        # if extraction_result['success'] is False:
+        #     error_msg = (
+        #         f'Extraction workflow failed with errors: {extraction_result["errors"]}'
+        #     )
+        #     workflow.logger.error(error_msg)
+        #     return {'refs': [], 'success': False, 'errors': extraction_result['errors']}
+        extraction_output_archive = {
+            'data': {
+                'm_def': 'nomad_llm_extraction.schema_packages.llm_extractor.LLMExtractionOutput',
+                # 'extracted_data': extraction_result['refs'],
+                'extracted_data': [
+                    '../uploads/R8xVJJhXR3mFy4c3qiCC-g/archive/3IuiEl1dqCpBhrtWtXF10OK5FuNB#/data'
+                ],
+                'action_id': workflow.info().workflow_id,
+            }
+        }
+        save_result = await workflow.execute_activity(
+            save_extraction_output,
+            ActionFileHandlerInput(
+                upload_id=data.upload_id,
+                user_id=data.user_id,
+                name='extraction_output',
+                data=[extraction_output_archive],
+            ),
+            start_to_close_timeout=timedelta(seconds=60),
+        )
+        if save_result['success'] is False:
+            error_msg = (
+                f'Failed to save extraction output with errors: {save_result["errors"]}'
+            )
+            workflow.logger.error(error_msg)
+            return {'success': False, 'errors': save_result['errors']}
+        return {'success': True, 'errors': []}
+
 
 @workflow.defn
 class ExtractionRouterWorkflow:
     @workflow.run
-    async def run(self, data: ExtractActionWorkflowInput) -> dict:
+    async def run(self, data: ExtractionWorkflowInput) -> dict:
         """
         Router workflow to run the whole extraction process from PDFs in a project/upload.
 
@@ -71,7 +144,8 @@ class ExtractionRouterWorkflow:
                 id=f'extract-pdf-workflow::{parent_workflow_id}',
             )
         else:
-            print('No PDF files to process, running extraction workflow directly with provided text or prompt.'
+            print(
+                'No PDF files to process, running extraction workflow directly with provided text or prompt.'
             )
             result = await workflow.execute_child_workflow(
                 ExtractTextWorkflow.run,
@@ -82,7 +156,7 @@ class ExtractionRouterWorkflow:
             error_msg = f'Extraction workflow failed with errors: {result["errors"]}'
             workflow.logger.error(error_msg)
             return {'refs': [], 'success': False, 'errors': result['errors']}
-        
+
         processing_input = ProcessNewFilesInput(
             upload_id=data.upload_id,
             user_id=data.user_id,
@@ -152,7 +226,7 @@ class ProcessExtractionsWorkflow:
 @workflow.defn
 class ExtractPDFWorkflow:
     @workflow.run
-    async def run(self, data: ExtractActionWorkflowInput) -> dict:
+    async def run(self, data: ExtractionWorkflowInput) -> dict:
         parent_workflow_id = workflow.info().workflow_id
         errors = []
         extractions = {}
@@ -236,7 +310,7 @@ class ExtractPDFWorkflow:
 @workflow.defn
 class ExtractTextWorkflow:
     @workflow.run
-    async def run(self, data: ExtractActionWorkflowInput):
+    async def run(self, data: ExtractionWorkflowInput) -> dict:
         parent_workflow_id = workflow.info().workflow_id
         name = data.name or data.upload_id
         print(f'Running LLM extraction workflow for {name}')
@@ -265,7 +339,9 @@ class ExtractTextWorkflow:
             workflow.logger.error(error_msg)
             errors.append(error_msg)
             return {'result': {}, 'success': False, 'errors': errors}
-        print(f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}')
+        print(
+            f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}'
+        )
         extraction_metadata = create_extraction_metadata(
             data.llm_engine_config.model_name, data.extraction_metadata
         )
