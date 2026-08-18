@@ -68,8 +68,8 @@ extra-index-url = [
 ]
 
 [tool.uv.sources]
-# nomad-lab = { git = "https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-FAIR.git" }
-nomad-lab = { workspace = true }
+nomad-lab = { git = "https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-FAIR.git" }
+# nomad-lab = { workspace = true }
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -158,9 +158,13 @@ line-ending = "auto"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+nomad_llm_extraction = ["config/*.yaml"]
 
 [project.entry-points.'nomad.plugin']
 llm_data_extractor_action = "nomad_llm_extraction.actions:llm_extractor_action_entry_point"

@@ -1,15 +1,12 @@
 from datetime import timedelta
 
-import dacite
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
-    import json
-    import time
+    from copy import deepcopy
     from dataclasses import dataclass
-    from typing import Any
 
     from nomad.actions.models import ActionStreamEventSeverity, ActionStreamEventType
     from nomad.actions.streams import ACTION_STREAM_TOPIC, ActionStreamEvent
@@ -35,10 +32,7 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.actions.llm_extractor.utils import (
         create_extraction_metadata,
     )
-    from nomad_llm_extraction.config import (
-        DEFAULT_EXTRACTION_CONFIG,
-        DEFAULT_EXTRACTION_METADATA,
-    )
+    from nomad_llm_extraction.config import DEFAULT_EXTRACTION_ACTION_CONFIG as DEFAULT_CONFIG
     from nomad_llm_extraction.pipeline.workflows import (
         GeneralExtractionWorkflow,
         GeneralExtractionWorkflowInput,
@@ -106,7 +100,7 @@ class ExtractionActionWorkflow:
         workflow.logger.info(
             f'Running LLM extraction action workflow for upload {data.upload_id}'
         )
-        extraction_config = DEFAULT_EXTRACTION_CONFIG
+        extraction_config = deepcopy(DEFAULT_CONFIG)
         if data.extract_multiple_instances:
             multi_instance_field = 'extracted_instances'
         else:

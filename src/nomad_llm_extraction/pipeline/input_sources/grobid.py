@@ -1,4 +1,3 @@
-import logging
 import re
 from typing import Any
 
@@ -6,8 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # from src.core.chunking import TextChunker
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class GrobidClient:

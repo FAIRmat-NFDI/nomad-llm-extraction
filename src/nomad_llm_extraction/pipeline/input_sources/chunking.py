@@ -1,10 +1,8 @@
-import logging
 from typing import Any
 
 import tiktoken
 from langchain_text_splitters.character import RecursiveCharacterTextSplitter
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class TextChunker:

@@ -14,10 +14,9 @@ from pathlib import Path
 import pymupdf
 import PyPDF2
 from diskcache import Cache
+from loguru import logger
 
 from nomad_llm_extraction.utils.utils import get_hash
-
-logger = logging.getLogger(__name__)
 
 
 def pypdf_parse(pdf_path: str | Path) -> str | None:

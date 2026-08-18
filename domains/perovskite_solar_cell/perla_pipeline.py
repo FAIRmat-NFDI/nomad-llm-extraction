@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
 
+from loguru import logger
 from temporalio import workflow
-
-logger = logging.getLogger(__name__)
 
 with workflow.unsafe.imports_passed_through():
     import json

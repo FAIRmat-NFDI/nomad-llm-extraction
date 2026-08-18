@@ -2,15 +2,14 @@ import logging
 import os
 from typing import Any, TypeVar
 
+import litellm
+from litellm import get_supported_openai_params, supports_response_schema
+from loguru import logger
 from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=BaseModel)
 
 try:
-    import litellm
-
     # Disable litellm error output
     litellm.suppress_debug_info = True
     litellm.set_verbose = False
@@ -31,10 +30,6 @@ except Exception:
         "Error importing LiteLLM. Make sure it's installed and configured properly if you intend to use it."
     )
     pass
-import litellm
-from litellm import get_supported_openai_params, supports_response_schema
-
-logger = logging.getLogger(__name__)
 
 
 def format_tool_call_schema(schema: dict) -> dict:
@@ -158,7 +153,7 @@ class LiteLLMEngine(StructuredLLMEngine):
             'type': 'function',
             'function': {'name': formatted_schema['name']},
         }
-
+        params_to_use.setdefault('reasoning_effort', None)
         try:
             resp = completion(
                 model=self.model_name,
