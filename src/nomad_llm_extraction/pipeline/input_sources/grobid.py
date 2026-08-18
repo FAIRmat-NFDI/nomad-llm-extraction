@@ -209,3 +209,30 @@ class GrobidXMLProcessor:
         except Exception as e:
             logger.error(f'Failed to process GROBID XML for {paper_id}: {e}')
             return []
+
+
+from pathlib import Path
+
+import PyPDF2
+
+
+def pypdf_parse(pdf_path: str | Path) -> str | None:
+    path_obj = Path(pdf_path)
+    try:
+        text = ''
+        with open(path_obj, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + '\n\n'
+
+        if not text.strip():
+            logger.warning(f'No text extracted from {path_obj}.')
+            return None
+
+        return text
+
+    except Exception as e:
+        logger.error(f'PDF extraction failed for {path_obj}: {e}')
+        return None

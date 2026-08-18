@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import litellm
 from litellm import get_supported_openai_params, supports_response_schema
@@ -32,23 +32,29 @@ except Exception:
     pass
 
 
-def format_tool_call_schema(schema: dict) -> dict:
+def format_tool_call_schema(schema: dict[str, Any]) -> dict:
     # adapted from https://github.com/567-labs/instructor/blob/47fdb2ca07119d389a3c0e8bc28b9930b814f294/instructor/v2/providers/openai/schema.py
     parameters = {k: v for k, v in schema.items() if k not in ('title', 'description')}
     parameters['required'] = sorted(schema.get('required', []))
-
     return {
-        'name': schema.get('title', ''),
-        'description': schema.get('description', ''),
+        'name': schema.get('title', 'ExtractedData'),
+        'description': schema.get('description', 'Extracted data from the document.'),
         'parameters': parameters,
     }
+
+
+Method = Literal['response_format', 'tool_call']
 
 
 class StructuredLLMEngine:
     """Base class for all structured extraction. its entire job is to define a strict contract or blueprint."""
 
     def generate(
-        self, prompt: str, json_schema: str, optional_params: dict = {}
+        self,
+        prompt: str,
+        json_schema: str,
+        optional_params: dict = {},
+        method: Method = 'tool_call',
     ) -> str:
         raise NotImplementedError('Subclasses must implement the generate method.')
 
@@ -105,6 +111,24 @@ class LiteLLMEngine(StructuredLLMEngine):
                 )
 
     def generate(
+        self,
+        prompt: str,
+        json_schema: str | dict[str, Any],
+        optional_params: dict = {},
+        method: Method = 'tool_call',
+    ) -> str:
+        if method == 'response_format':
+            return self.generate_with_response_format(
+                prompt, json_schema, optional_params
+            )
+        elif method == 'tool_call':
+            return self.generate_with_tool_call(prompt, json_schema, optional_params)
+        else:
+            raise ValueError(
+                f'Invalid method: {method}. Supported methods are "response_format" and "tool_call".'
+            )
+
+    def generate_with_response_format(
         self, prompt: str, json_schema: str | dict[str, Any], optional_params: dict = {}
     ) -> str:
         from litellm import completion
@@ -141,26 +165,32 @@ class LiteLLMEngine(StructuredLLMEngine):
         return message_content
 
     def generate_with_tool_call(
-        self, prompt: str, schema: dict, optional_params: dict = {}
+        self, prompt: str, json_schema: str | dict[str, Any], optional_params: dict = {}
     ) -> str:
         from litellm import completion
 
+        if isinstance(json_schema, str):
+            import json
+
+            try:
+                json_schema = json.loads(json_schema)
+            except json.JSONDecodeError as e:
+                logger.error(f'Invalid JSON schema string: {e}')
+                raise
         params_to_use = {**optional_params}
         self.check_additional_params(optional_params)
-        formatted_schema = format_tool_call_schema(schema)
-        tools = [{'type': 'function', 'function': formatted_schema}]
-        tool_choice = {
+        formatted_schema = format_tool_call_schema(json_schema)
+        params_to_use['tools'] = [{'type': 'function', 'function': formatted_schema}]
+        params_to_use['tool_choice'] = {
             'type': 'function',
             'function': {'name': formatted_schema['name']},
         }
-        params_to_use.setdefault('reasoning_effort', None)
+        params_to_use.setdefault('reasoning_effort', 'none')
         try:
             resp = completion(
                 model=self.model_name,
                 api_base=self.base_url,
                 messages=[{'role': 'user', 'content': prompt}],
-                tools=tools,
-                tool_choice=tool_choice,
                 drop_params=True,
                 **params_to_use,
             )

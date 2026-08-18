@@ -54,6 +54,10 @@ class SchemaSource:
             # If multi_instance_field is set, we assume the schema describes a single instance
             # and we wrap it in an array under the multi_instance_field key.
             schema = {
+                'title': f'{schema.get("title", "ExtractedData")}Instances',
+                'description': schema.get(
+                    'description', 'Extracted data from the document.'
+                ),
                 'type': 'object',
                 'properties': {
                     self._multi_instance_field: {

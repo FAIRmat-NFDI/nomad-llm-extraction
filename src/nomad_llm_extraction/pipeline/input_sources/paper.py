@@ -8,37 +8,13 @@ Example Usage:
     text = grobid_parse("path/to/paper.pdf", api_url="http://localhost:8080/api")
 """
 
-import logging
 from pathlib import Path
 
 import pymupdf
-import PyPDF2
 from diskcache import Cache
 from loguru import logger
 
 from nomad_llm_extraction.utils.utils import get_hash
-
-
-def pypdf_parse(pdf_path: str | Path) -> str | None:
-    path_obj = Path(pdf_path)
-    try:
-        text = ''
-        with open(path_obj, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            for page in reader.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    text += extracted + '\n\n'
-
-        if not text.strip():
-            logger.warning(f'No text extracted from {path_obj}.')
-            return None
-
-        return text
-
-    except Exception as e:
-        logger.error(f'PDF extraction failed for {path_obj}: {e}')
-        return None
 
 
 def pymupdf_parse(pdf_path: str | Path) -> str:
@@ -50,7 +26,6 @@ def pymupdf_parse(pdf_path: str | Path) -> str:
 
 
 parsers = {
-    'pypdf': pypdf_parse,
     'pymupdf': pymupdf_parse,
 }
 

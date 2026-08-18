@@ -145,7 +145,6 @@ class ExtractionActionInput(BaseModel):
     @property
     def model_technical_name(self):
         prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
-        print(f'Using model_name: {self.model_name is not None}')
         if self.model_name is not None:
             print(f'Using model_name: {self.model_name}')
             return prefix + self.model_name

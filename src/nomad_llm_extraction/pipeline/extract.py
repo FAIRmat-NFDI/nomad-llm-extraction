@@ -62,9 +62,6 @@ def extract(config: str | dict[str, Any] | GeneralExtractionWorkflowInput):
     if isinstance(config, str):
         config = load_yaml_config(config)
     if isinstance(config, dict):
-        # config = dacite.from_dict(
-        #     data_class=GeneralExtractionWorkflowInput, data=config
-        # )
         config = GeneralExtractionWorkflowInput(**config)
     print('Starting extraction workflow with config:')
     print(config)
