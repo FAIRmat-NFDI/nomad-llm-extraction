@@ -1,6 +1,7 @@
 import json
 import time
 
+from nomad.utils.structlogging import get_logger
 from temporalio import activity
 
 from nomad_llm_extraction.actions.llm_extractor.models import (
@@ -10,15 +11,29 @@ from nomad_llm_extraction.actions.llm_extractor.models import (
 )
 
 MAX_ATTEMPT_NUM = 100  # attempts to reprocess upload with new entries
+ACTION_NAME = 'nomad_llm_extraction_action'
 
 
-@activity.defn(name='nomad_llm_extraction.get_list_of_pdfs')
+@activity.defn(name=f'{ACTION_NAME}.logging')
+def log_message(message: str) -> None:
+    """
+    Log a message to the workflow logger.
+    """
+    logger = get_logger(__name__)
+    logger = logger.bind(workflow=activity.info().workflow_type)
+    logger.info(message)
+
+
+@activity.defn(name=f'{ACTION_NAME}.get_list_of_pdfs')
 def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
     """
     Find all PDF files in the upload if authorized user has access to the upload.
     """
     from nomad.actions.manager import get_upload_files
 
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
     pdfs = []
     upload_files = get_upload_files(
         input_data.upload_id,
@@ -33,13 +48,20 @@ def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
         for file_info in raw_files:
             if file_info.path.lower().endswith('.pdf'):
                 pdfs.append(file_info.path)
-
+    if len(pdfs) == 0:
+        logger.error(
+            f'No PDF files found in the upload with ID: {input_data.upload_id}'
+        )
+    else:
+        logger.info(
+            f'Found {len(pdfs)} PDF files in the upload with ID: {input_data.upload_id}'
+        )
     return {
         'pdfs': pdfs,
     }
 
 
-@activity.defn(name='nomad_llm_extraction.get_config')
+@activity.defn(name=f'{ACTION_NAME}.get_config')
 def get_config(input_data):
     from nomad.actions.manager import get_upload_files
 
@@ -71,7 +93,7 @@ def get_config(input_data):
     )
 
 
-@activity.defn(name='nomad_llm_extraction.get_text_from_pdf')
+@activity.defn(name=f'{ACTION_NAME}.get_text_from_pdf')
 def get_text_from_pdf(
     input_data: ActionFileHandlerInput,
 ) -> tuple[str | None, str | None]:
@@ -80,22 +102,27 @@ def get_text_from_pdf(
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
     from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
 
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
     upload_files = get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
     if upload_files is None:
         error_msg = f'Upload files not found or can not be accessed for upload ID: {input_data.upload_id}'
-        activity.logger.error(error_msg)
+        logger.error(error_msg)
         return None, None
     pdf_path = upload_files.raw_file_object(input_data.name).os_path
     parser = PDFParser()
     text = parser.parse_pdf(pdf_path)
     doi = extract_doi_from_pdf(pdf_path)
+    if not text:
+        logger.warning(f'Failed to extract text from PDF: {input_data.name}')
     return text, doi
 
 
-@activity.defn(name='nomad_llm_extraction.dump_extractions')
+@activity.defn(name=f'{ACTION_NAME}.dump_extractions')
 async def dump_extractions(input_data: ActionFileHandlerInput):
     from nomad.actions.manager import get_upload_files
 
@@ -118,7 +145,7 @@ async def dump_extractions(input_data: ActionFileHandlerInput):
     return save_paths
 
 
-@activity.defn(name='nomad_llm_extraction.process_new_files')
+@activity.defn(name=f'{ACTION_NAME}.process_new_files')
 async def process_new_files(data: ProcessNewFilesInput) -> dict:
     """Process newly created entries in the upload, then return their references."""
     from nomad.actions.manager import action_instance_artifacts_dir, get_upload_files
@@ -127,13 +154,16 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
     from nomad.processing.data import Upload
     from nomad.utils import generate_entry_id
 
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
     upload_files = get_upload_files(
         data.upload_id,
         data.user_id,
     )
     if upload_files is None:
         error_msg = f'Upload files not found or can not be accessed for upload ID: {data.upload_id}'
-        activity.logger.error(error_msg)
+        logger.error(error_msg)
         return {'refs': [], 'success': False, 'errors': [error_msg]}
 
     file_operations = []
@@ -154,7 +184,7 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         upload_files = get_upload_files(data.upload_id, data.user_id)
         if upload_files is None:
             error_msg = f'Upload files not found or can not be accessed for upload ID: {data.upload_id}'
-            activity.logger.error(error_msg)
+            logger.error(error_msg)
             return {'refs': [], 'success': False, 'errors': [error_msg]}
         upload = Upload.get(data.upload_id)
 
@@ -163,12 +193,12 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         else:
             # reload if upload is busy
             time.sleep(0.5)
-            activity.logger.warning('Upload is currently being processed. Waiting...')
+            logger.warning('Upload is currently being processed. Waiting...')
     else:
         error_msg = (
             f'Upload {data.upload_id} is busy for too long. Cannot process new files.'
         )
-        activity.logger.error(error_msg)
+        logger.error(error_msg)
         return {'refs': [], 'success': False, 'errors': [error_msg]}
     handle = upload.process_upload(
         file_operations=file_operations,
@@ -198,7 +228,7 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
     return {'refs': result_entry_refs, 'success': True, 'errors': []}
 
 
-@activity.defn(name='nomad_llm_extraction.save_extraction_output')
+@activity.defn(name=f'{ACTION_NAME}.save_extraction_output')
 async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     """
     Save the extraction output to a JSON file in the upload.
@@ -206,11 +236,14 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     from nomad.actions.manager import get_upload_files
     from nomad.processing.data import Upload
 
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
     for i in range(MAX_ATTEMPT_NUM):
         upload_files = get_upload_files(input_data.upload_id, input_data.user_id)
         upload = Upload.get(input_data.upload_id)
     if upload_files is None:
-        activity.logger.error(
+        logger.error(
             f'Upload files not found or can not be accessed for upload ID: {input_data.upload_id}'
         )
         return {
@@ -241,25 +274,29 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     if upload_files.raw_path_exists(file_name):
         upload_files.delete_rawfiles('temp')
         return {'success': True, 'errors': []}
+    logger.error(f'Failed to save extraction output to {file_name}')
     return {
         'success': False,
         'errors': [f'Failed to save extraction output to {file_name}'],
     }
 
 
-@activity.defn(name='nomad_llm_extraction.remove_source_pdfs')
+@activity.defn(name=f'{ACTION_NAME}.remove_source_pdfs')
 def remove_source_pdfs(input_data: CleanupInput) -> None:
     """
     Remove source PDF files from the upload after extraction.
     """
     from nomad.actions.manager import get_upload_files
 
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
     upload_files = get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
     if upload_files is None:
-        activity.logger.error(
+        logger.error(
             f'Upload files not found or can not be accessed for upload ID: {input_data.upload_id}'
         )
         return

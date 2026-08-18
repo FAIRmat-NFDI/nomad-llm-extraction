@@ -1,27 +1,7 @@
-"""(Outlines/Instructor Constrained Decoding).
-
-Example Usage:
-
-    from nomad_llm_extraction.pipeline.schema_filling.llm_engine import OutlinesEngine, InstructorEngine
-
-    # For Local vLLM
-    # active_engine = OutlinesEngine(model_name="Qwen/Qwen2.5-72B", api_url="http://localhost:8000/v1")
-
-    # For Local Ollama
-    # active_engine = InstructorEngine(model_name="llama3.1", api_url="http://localhost:11434/v1")
-
-    # For Cloud ChatGPT
-    # active_engine = InstructorEngine(model_name="gpt-4o", api_key="sk-...")
-
-    # json schema
-    needed to use json schema for outlines
-"""
-
 import logging
 import os
 from typing import Any, TypeVar
 
-from openai import OpenAI
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -57,6 +37,18 @@ from litellm import get_supported_openai_params, supports_response_schema
 logger = logging.getLogger(__name__)
 
 
+def format_tool_call_schema(schema: dict) -> dict:
+    # adapted from https://github.com/567-labs/instructor/blob/47fdb2ca07119d389a3c0e8bc28b9930b814f294/instructor/v2/providers/openai/schema.py
+    parameters = {k: v for k, v in schema.items() if k not in ('title', 'description')}
+    parameters['required'] = sorted(schema.get('required', []))
+
+    return {
+        'name': schema.get('title', ''),
+        'description': schema.get('description', ''),
+        'parameters': parameters,
+    }
+
+
 class StructuredLLMEngine:
     """Base class for all structured extraction. its entire job is to define a strict contract or blueprint."""
 
@@ -69,23 +61,53 @@ class StructuredLLMEngine:
 class LiteLLMEngine(StructuredLLMEngine):
     def __init__(self, model_name: str, api_url: str | None = None, api_key: str = ''):
         self.model_name = model_name
-        params = get_supported_openai_params(model=model_name)
-        if params is None:
-            raise ValueError(f'Model {model_name} is not supported by LiteLLM.')
-        assert 'response_format' in params, (
-            f'Model {model_name} does not support response_format parameter required for structured output.'
-        )
-        assert supports_response_schema(model=model_name), (
-            f'Model {model_name} does not support json schema response for structured output.'
-        )
+        params = []
+        try:
+            params = get_supported_openai_params(model=model_name)
 
-        self.params = params
+            if params is None:
+                raise ValueError(f'Model {model_name} is not supported by LiteLLM.')
+            msgs = []
+            for param in ['response_format', 'tools', 'tool_choice']:
+                if param not in params:
+                    msgs.append(
+                        f'Model {model_name} does not support {param} parameter.\n'
+                    )
+
+            if not supports_response_schema(model=model_name):
+                msgs.append(
+                    f'Model {model_name} does not support json schema response for structured output.\n'
+                )
+            if msgs:
+                logger.warning(
+                    f'LiteLLM model {model_name} may not support all features:\n'
+                    + '\n'.join(msgs)
+                    + '\nProceeding with caution.'
+                )
+        except Exception as e:
+            logger.warning(
+                f'Error checking model support in LiteLLM: {e} \n Proceeding with caution.'
+            )
+
+        self.params = params or []
         self.base_url = api_url
 
         if api_key:
             litellm.api_key = (
                 api_key if type(api_key) is str else api_key.get_secret_value()
             )
+
+    def check_additional_params(self, optional_params: dict):
+        if not self.params:
+            logger.warning(
+                f'No supported parameters found for model {self.model_name}. Cannot check optional parameters.'
+            )
+            return
+        for param in optional_params:
+            if param not in self.params:
+                logger.warning(
+                    f'Parameter: {param} is not supported by model {self.model_name}'
+                )
 
     def generate(
         self, prompt: str, json_schema: str | dict[str, Any], optional_params: dict = {}
@@ -101,84 +123,59 @@ class LiteLLMEngine(StructuredLLMEngine):
             },
             # 'strict': True,
         }
+        self.check_additional_params(optional_params)
         params_to_use = {**optional_params}
-        for param in optional_params:
-            if param not in self.params:
-                logger.warning(
-                    f'Parameter {param} is not supported by model {self.model_name} and will be ignored.'
-                )
-                del params_to_use[param]
         try:
             resp = completion(
                 model=self.model_name,
-                base_url=self.base_url,
+                api_base=self.base_url,
                 messages=[{'role': 'user', 'content': prompt}],
                 response_format=response_format,
+                drop_params=True,
                 **params_to_use,
             )
+            message_content = resp.choices[0].message.content
+        except (AttributeError, IndexError, TypeError, ValueError) as e:
+            logger.error(
+                f'LiteLLM generation failed due to unexpected response structure: {e}'
+            )
+            raise
         except Exception as e:
             logger.error(f'LiteLLM generation failed: {e}')
             raise
-        return resp.choices[0].message.content
+        return message_content
 
+    def generate_with_tool_call(
+        self, prompt: str, schema: dict, optional_params: dict = {}
+    ) -> str:
+        from litellm import completion
 
-# class OutlinesEngine(StructuredLLMEngine):
-#     def __init__(
-#         self, model_name: str, api_url: str | None = None, api_key: str = 'EMPTY'
-#     ):
-#         import outlines
+        params_to_use = {**optional_params}
+        self.check_additional_params(optional_params)
+        formatted_schema = format_tool_call_schema(schema)
+        tools = [{'type': 'function', 'function': formatted_schema}]
+        tool_choice = {
+            'type': 'function',
+            'function': {'name': formatted_schema['name']},
+        }
 
-#         self.model_name = model_name
-
-#         if api_url:
-#             self.client = OpenAI(base_url=api_url, api_key=api_key)
-#         else:
-#             self.client = OpenAI(api_key=api_key if api_key != 'EMPTY' else None)
-
-#         # Using user's original logic
-#         self.model = outlines.from_vllm(self.client, model_name)
-#         logger.info(f'Initialized OutlinesEngine for {model_name}')
-
-#     def generate(
-#         self, prompt: str, response_model: type[T], temperature: float = 0.1
-#     ) -> T:
-#         try:
-#             # tell outlines to use the passed pydantic model
-#             result_json = self.model(
-#                 prompt, output_type=response_model, temperature=temperature
-#             )
-#             return response_model.model_validate_json(result_json)
-#         except Exception as e:
-#             logger.error(f'Outlines generation failed: {e}')
-#             raise
-
-
-# class InstructorEngine(StructuredLLMEngine):
-#     def __init__(
-#         self, model_name: str, api_url: str | None = None, api_key: str = 'EMPTY'
-#     ):
-#         import instructor
-
-#         self.model_name = model_name
-
-#         if api_url:
-#             base_client = OpenAI(base_url=api_url, api_key=api_key)
-#         else:
-#             base_client = OpenAI(api_key=api_key if api_key != 'EMPTY' else None)
-
-#         self.client = instructor.from_openai(base_client)
-#         logger.info(f'Initialized InstructorEngine for {model_name}')
-
-#     def generate(
-#         self, prompt: str, response_model: type[T], temperature: float = 0.1
-#     ) -> T:
-#         try:
-#             return self.client.chat.completions.create(
-#                 model=self.model_name,
-#                 response_model=response_model,
-#                 messages=[{'role': 'user', 'content': prompt}],
-#                 temperature=temperature,
-#             )
-#         except Exception as e:
-#             logger.error(f'Instructor generation failed: {e}')
-#             raise
+        try:
+            resp = completion(
+                model=self.model_name,
+                api_base=self.base_url,
+                messages=[{'role': 'user', 'content': prompt}],
+                tools=tools,
+                tool_choice=tool_choice,
+                drop_params=True,
+                **params_to_use,
+            )
+            message_content = resp.choices[0].message.tool_calls[0].function.arguments
+        except (AttributeError, IndexError, TypeError, ValueError) as e:
+            logger.error(
+                f'LiteLLM generation with tool call failed due to unexpected response structure: {e}'
+            )
+            raise
+        except Exception as e:
+            logger.error(f'LiteLLM generation with tool call failed: {e}')
+            raise
+        return message_content

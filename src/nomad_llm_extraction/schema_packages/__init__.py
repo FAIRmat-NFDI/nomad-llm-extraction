@@ -10,6 +10,6 @@ class LlmExtractorPackageEntryPoint(SchemaPackageEntryPoint):
 
 
 llm_extractor = LlmExtractorPackageEntryPoint(
-    name='LlmExtractor',
+    name='LLMExtractor',
     description='Schema package defined for the LLM extractor.',
 )

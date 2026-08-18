@@ -3,13 +3,44 @@ from typing import Literal
 from pydantic import BaseModel, Field, SecretStr, field_serializer
 
 ModelName = Literal[
-    'gpt-4o',
-    # 'gpt-5',  # Uncomment when temperature support is correct in LiteLLM
-    'claude-4-sonnet-20250514',
-    'claude-sonnet-4-6',
-    #  'meta.llama3-70b-instruct-v1:0',  # Uncomment when someone can test it
+    'Claude Sonnet 5',
+    'GPT OSS 20b',
+    'Llama 4 Scout',
+    'LLama 4 Maverick',
+    'LLama 3.3',
+    'GPT 4o',
+    'Claude Sonnet 4.6',
+    'Claude Sonnet 4.v20250514',
+    'Claude Fable 5',
+    'Claude Opus 4.8',
+    'GPT 5.6 Sol',
+    'GPT 5.6 Terra',
+    'GPT 5.6 Luna',
+    'Gemini Pro Latest',
+    'Gemini 3 Flash',
+    'Gemini 3.6 Flash',
+    'Gemini 3.5 Flash',
 ]  # Restricted set of LLM model names supported.
 
+ModelAliases = {
+    'Claude Sonnet 5': 'claude-sonnet-5',
+    'GPT OSS 20b': 'gpt-oss-20b',
+    'Llama 4 Scout': 'Llama-4-Scout-17B-16E-Instruct-FP8',
+    'LLama 4 Maverick': 'Llama-4-Maverick-17B-128E-Instruct-FP8',
+    'LLama 3.3': 'Llama-3.3-70B-Instruct',
+    'GPT 4o': 'gpt-4o',
+    'Claude Sonnet 4.6': 'claude-sonnet-4-6',
+    'Claude Sonnet 4.v20250514': 'claude-4-sonnet-20250514',
+    'Claude Fable 5': 'claude-fable-5',
+    'Claude Opus 4.8': 'claude-opus-4-8',
+    'GPT 5.6 Sol': 'gpt-5.6-sol',
+    'GPT 5.6 Terra': 'gpt-5.6-terra',
+    'GPT 5.6 Luna': 'gpt-5.6-luna',
+    'Gemini Pro Latest': 'gemini/gemini-pro-latest',
+    'Gemini 3 Flash': 'gemini/gemini-3-flash',
+    'Gemini 3.6 Flash': 'gemini/gemini-3.6-flash',
+    'Gemini 3.5 Flash': 'gemini/gemini-3.5-flash',
+}
 from typing import Any
 
 from nomad_llm_extraction.pipeline.models import GeneralExtractionWorkflowInput
@@ -75,7 +106,21 @@ class ExtractionActionInput(BaseModel):
     )
     api_token: SecretStr = Field(..., description='API token for LLM access.')
     model: ModelName = Field(
-        'claude-4-sonnet-20250514', description='LLM model to be used for extraction.'
+        'Claude Sonnet 4.6', description='LLM model to be used for extraction.'
+    )
+    api_base_url: str | None = Field(
+        None,
+        title='API Base URL (Optional)',
+        description="""
+        Base URL for the LLM API; for example, https://openrouter.ai/.
+        If you are from an academic institution, you can probably access open models via
+        Blablador (API: https://api.blablador.fz-juelich.de/v1/ User guide: https://sdlaml.pages.jsc.fz-juelich.de/ai/guides/blablador_api_access/).
+        """,
+    )
+    model_name: str | None = Field(
+        None,
+        title='Model Name (Optional)',
+        description='LLM model to be used for extraction as a free text. If filled, the model from the drop-down menu will be ignored.',
     )
     extraction_m_def: str = Field(
         ..., description='Nomad Section m_def to be used for extraction.'
@@ -88,10 +133,24 @@ class ExtractionActionInput(BaseModel):
         default=True,
         description='Whether to delete the source PDF files after processing.',
     )
+    extract_multiple_instances: bool = Field(
+        default=True,
+        description='Whether to extract multiple instances of the schema from the text.',
+    )
 
     @field_serializer('api_token', when_used='json')
     def dump_secret(self, v):
         return v.get_secret_value()
+
+    @property
+    def model_technical_name(self):
+        prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
+        print(f'Using model_name: {self.model_name is not None}')
+        if self.model_name is not None:
+            print(f'Using model_name: {self.model_name}')
+            return prefix + self.model_name
+        else:
+            return prefix + ModelAliases[self.model]
 
 
 class SingleExtractionInput(BaseModel):

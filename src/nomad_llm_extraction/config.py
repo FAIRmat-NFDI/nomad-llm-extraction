@@ -15,3 +15,10 @@ except Exception:
     DEFAULT_EXTRACTION_CONFIG = load_yaml_config(
         pathlib.Path('config/action_default_config.yaml').resolve().as_posix()
     )
+if DEFAULT_EXTRACTION_CONFIG.get('extract_multiple_instances'):
+    DEFAULT_EXTRACTION_CONFIG['schema_config']['multi_instance_field'] = (
+        ('extracted_instances')
+        if DEFAULT_EXTRACTION_CONFIG['schema_config'].get('multi_instance_field')
+        is not None
+        else None
+    )
