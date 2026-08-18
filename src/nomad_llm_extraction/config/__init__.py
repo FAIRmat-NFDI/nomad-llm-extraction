@@ -38,9 +38,9 @@ def _load_default_extraction_config() -> dict:
 
 DEFAULT_EXTRACTION_ACTION_CONFIG = _load_default_extraction_config()
 if DEFAULT_EXTRACTION_ACTION_CONFIG.get('extract_multiple_instances'):
+    multi_instance_field = DEFAULT_EXTRACTION_ACTION_CONFIG['schema_config'].get(
+        'multi_instance_field'
+    )
     DEFAULT_EXTRACTION_ACTION_CONFIG['schema_config']['multi_instance_field'] = (
-        ('extracted_instances')
-        if DEFAULT_EXTRACTION_ACTION_CONFIG['schema_config'].get('multi_instance_field')
-        is not None
-        else None
+        multi_instance_field or 'extracted_instances'
     )

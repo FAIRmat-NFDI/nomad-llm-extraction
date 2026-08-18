@@ -74,7 +74,11 @@ class LLMCallWorkflow:
 
         if not validation_result.validated:
             error_msg = f'ValidationError: {validation_result.message}'
-            raise Exception(error_msg)
+            return LLMCallOutput(
+                extracted_data=extracted_data,
+                raw_output=raw_output,
+                err_message=error_msg,
+            )
         return LLMCallOutput(
             extracted_data=extracted_data, raw_output=raw_output, err_message=None
         )
