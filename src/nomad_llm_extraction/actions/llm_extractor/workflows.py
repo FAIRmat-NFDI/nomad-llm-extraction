@@ -32,10 +32,12 @@ with workflow.unsafe.imports_passed_through():
     from nomad_llm_extraction.actions.llm_extractor.utils import (
         create_extraction_metadata,
     )
-    from nomad_llm_extraction.config import DEFAULT_EXTRACTION_ACTION_CONFIG as DEFAULT_CONFIG
+    from nomad_llm_extraction.config import (
+        DEFAULT_EXTRACTION_ACTION_CONFIG as DEFAULT_CONFIG,
+    )
+    from nomad_llm_extraction.pipeline.workflows import ExtractionWorkflow
     from nomad_llm_extraction.pipeline.workflows import (
-        GeneralExtractionWorkflow,
-        GeneralExtractionWorkflowInput,
+        ExtractionWorkflowInput as PipelineExtractionWorkflowInput,
     )
     from nomad_llm_extraction.utils.export_to_nomad import process_to_nomad
 
@@ -462,13 +464,13 @@ class ExtractTextWorkflow:
             workflow.logger.error(error_msg)
             errors.append(error_msg)
             return {'result': {}, 'success': False, 'errors': errors}
-        extraction_workflow_input = GeneralExtractionWorkflowInput(**data.model_dump())
+        extraction_workflow_input = PipelineExtractionWorkflowInput(**data.model_dump())
         if data.llm_engine_config.api_key is not None:
             extraction_workflow_input.llm_engine_config.api_key = (
                 data.llm_engine_config.api_key
             )
         extraction_result = await workflow.execute_child_workflow(
-            GeneralExtractionWorkflow.run,
+            ExtractionWorkflow.run,
             extraction_workflow_input,
             id=f'extraction-workflow::{parent_workflow_id}',
             retry_policy=retry_policy,
