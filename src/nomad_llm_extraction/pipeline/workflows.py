@@ -199,11 +199,14 @@ class GeneralExtractionWorkflow:
                 )
             extraction_workflow_input = ExtractionWorkflowInput(
                 extraction_schema=extraction_schema,
+                prompt=inp.prompt,
                 text=inp.text,
                 pdf_path=inp.pdf_path,
                 system_prompt=inp.system_prompt,
                 instruction_text=inp.instruction_text,
                 llm_engine_config=inp.llm_engine_config,
+                llm_engine_optional_params=inp.llm_engine_optional_params,
+                max_retry_attempts=inp.max_retry_attempts,
             )
             return await workflow.execute_child_workflow(
                 ExtractionWorkflow.run,
