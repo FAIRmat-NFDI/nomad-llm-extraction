@@ -3,7 +3,8 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from benedict import benedict
+
+# from benedict import benedict
 from nomad.datamodel.metainfo.annotations import Rules
 from scalpl import Cut
 
@@ -201,13 +202,9 @@ def test_inplace_transformer_splits_concentration_units(archive):
     updated_archive = transformer.transform_inplace(archive, 'split_concentration')
 
     for item in range(len(archive)):
-        transformed = benedict(deepcopy(updated_archive[item]))
-        original = benedict(deepcopy(archive[item]))
-        concentration_paths = [
-            '.'.join(path.split('.')[:-1])
-            for path in original.keypaths(indexes=True)
-            if path.split('.')[-1] == 'concentration'
-        ]
+        transformed = Cut(deepcopy(updated_archive[item]))
+        original = Cut(deepcopy(archive[item]))
+        concentration_paths = get_paths(original, split_value_unit_cond, None, 'path')
         for path in concentration_paths:
             assert f'{path}.concentration_unit' in transformed
             assert f'{path}.concentration.value' not in transformed
