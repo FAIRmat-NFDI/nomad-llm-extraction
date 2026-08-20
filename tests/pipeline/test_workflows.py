@@ -198,7 +198,12 @@ async def test_extraction_workflow_returns_result_after_retry_limit(
 @pytest.mark.parametrize(
     ('extraction_schema', 'text', 'pdf_path', 'message'),
     [
-        (None, 'text', None, 'No extraction schema provided'),
+        (
+            None,
+            'text',
+            None,
+            'Either extraction_schema or schema_config must be provided',
+        ),
         ({'type': 'object'}, None, 'empty.pdf', 'No text parsed from PDF:empty.pdf'),
     ],
 )
@@ -234,50 +239,47 @@ async def test_extraction_workflow_wraps_input_failures(
         ),
     ],
 )
-async def test_general_workflow_resolves_schema_and_starts_extraction(
+async def test_extraction_workflow_resolves_schema_config_before_llm_call(
     monkeypatch, engine_config, schema_config, schema_activity
 ):
+    activities = []
+    child_inputs = []
+
     async def execute_activity(activity, value, **kwargs):
-        assert activity is schema_activity
-        assert value is schema_config
-        return {'type': 'object'}
+        activities.append((activity, value))
+        if activity is schema_activity:
+            assert value is schema_config
+            return {'type': 'object'}
+        assert activity is workflows.build_prompt
+        assert value.extraction_schema == {'type': 'object'}
+        return 'built prompt'
 
     async def execute_child_workflow(workflow, value, **kwargs):
-        assert workflow == workflows.ExtractionWorkflow.run
-        assert value.extraction_schema == {'type': 'object'}
-        assert value.prompt == 'prebuilt prompt'
-        assert value.text == 'source text'
-        assert value.llm_engine_optional_params == {'temperature': 0.1}
-        assert value.max_retry_attempts == 5
-        assert kwargs['id'] == 'nomad_extraction_workflow'
-        assert kwargs['retry_policy'].maximum_attempts == 1
-        return SimpleNamespace(extracted_data={'value': 1})
+        child_inputs.append((workflow, value, kwargs))
+        return LLMCallOutput(extracted_data={'value': 1}, raw_output='raw output')
 
     monkeypatch.setattr(workflows.workflow, 'execute_activity', execute_activity)
     monkeypatch.setattr(
         workflows.workflow, 'execute_child_workflow', execute_child_workflow
     )
     inp = ExtractionWorkflowInput(
-        extraction_schema={'unused': True},
+        schema_config=schema_config,
         text='source text',
         llm_engine_config=engine_config,
     )
-    general_input = inp.model_copy(
-        update={
-            'prompt': 'prebuilt prompt',
-            'llm_engine_optional_params': {'temperature': 0.1},
-            'max_retry_attempts': 5,
-            'schema_config': schema_config,
-        }
-    )
 
-    result = await workflows.GeneralExtractionWorkflow().run(general_input)
+    result = await workflows.ExtractionWorkflow().run(inp)
 
     assert result.extracted_data == {'value': 1}
+    assert [activity for activity, _ in activities] == [
+        schema_activity,
+        workflows.build_prompt,
+    ]
+    assert child_inputs[0][1].extraction_schema == {'type': 'object'}
 
 
 @pytest.mark.asyncio
-async def test_general_workflow_wraps_schema_resolution_error(
+async def test_extraction_workflow_wraps_schema_resolution_error(
     monkeypatch, engine_config
 ):
     async def execute_activity(*args, **kwargs):
@@ -285,15 +287,12 @@ async def test_general_workflow_wraps_schema_resolution_error(
 
     monkeypatch.setattr(workflows.workflow, 'execute_activity', execute_activity)
     inp = ExtractionWorkflowInput(
-        extraction_schema={'unused': True},
+        schema_config=InlineSchemaConfig(inline_schema={'type': 'object'}),
         text='source text',
         llm_engine_config=engine_config,
     )
-    general_input = inp.model_copy(
-        update={'schema_config': InlineSchemaConfig(inline_schema={'type': 'object'})}
-    )
 
     with pytest.raises(ApplicationError, match='schema service unavailable') as error:
-        await workflows.GeneralExtractionWorkflow().run(general_input)
+        await workflows.ExtractionWorkflow().run(inp)
 
     assert error.value.non_retryable is True
