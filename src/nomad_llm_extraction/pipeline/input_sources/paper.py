@@ -56,14 +56,15 @@ class PDFParser:
         logger.info(f'PDFParser initialized with method: {parse_method}')
 
     def parse_pdf(self, pdf_path: str | Path) -> str | None:
-        if self.use_cache and self.cache is not None:
-            filehash = get_hash(pdf_path)
-            if cached := self.cache.get(str(filehash)):
-                return cached
         path_obj = Path(pdf_path)
         if not path_obj.exists():
             logger.error(f'PDF file not found at {path_obj}')
             return None
+
+        if self.use_cache and self.cache is not None:
+            filehash = get_hash(path_obj)
+            if cached := self.cache.get(str(filehash)):
+                return cached
 
         try:
             text = self.parser(path_obj)
