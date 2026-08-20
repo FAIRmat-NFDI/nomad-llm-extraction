@@ -1,1 +1,2 @@
 graft src/nomad_llm_extraction/example_uploads
+graft src/nomad_llm_extraction/resources

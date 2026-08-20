@@ -25,9 +25,19 @@ maintainers = [
 ]
 license = { file = "LICENSE" }
 dependencies = [
-    "nomad-lab>=1.4.1",
+    "jsonref>=1.1.0",
+    "jsonschema>=4.26.0",
     "pydantic",
-    "temporalio"
+    "temporalio",
+    "nomad-lab>=1.4.1",
+    "loguru>=0.7.3",
+    "scalpl>=0.4.2",
+    "litellm>=1.91.0",
+    "pymupdf>=1.27.2.3",
+    "diskcache>=5.6.3",
+    "rfc3987>=1.3.8",
+    "fire>=0.7.1",
+    "pdf2doi>=1.7",
 ]
 
 [project.urls]
@@ -45,11 +55,20 @@ dev = [
     "pytest-asyncio",
 ]
 
+tutorial = [
+    "deepdiff>=9.0.0",
+    "jupyterlab>=4.5.6",
+]
+
 [tool.uv]
 extra-index-url = [
   "https://gitlab.mpcdf.mpg.de/api/v4/projects/2187/packages/pypi/simple",
 ]
-    
+
+[tool.uv.sources]
+nomad-lab = { git = "https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-FAIR.git" }
+# nomad-lab = { workspace = true }
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -80,28 +99,40 @@ exclude = [
 line-length = 88
 indent-width = 4
 
-
 [tool.ruff.lint]
 select = [
-    # pycodestyle
-    "E",
-    # Pyflakes
-    "F",
-    # pyupgrade
-    "UP",
-    # isort
-    "I",
-    # pylint
-    "PL",
+  "E", # pycodestyle
+  "F", # pyflakes
+  "F401", # remove unused import
+  "FAST", # FastAPI
+  "I001", # sort imports
+  "PL", # pylint
+  "UP", # pyupgrade
+  "W", # pycodestyle
 ]
-
 ignore = [
-    "F403", # 'from module import *' used; unable to detect undefined names
-    "PLC0415", # `import` should be at the top-level of a file
-    "E501", # line too long
+  "F403", # 'from module import *' used; unable to detect undefined names
+  "PLC0415", # `import` should be at the top-level of a file
+  "E402", # Module level import not at top of file
+  "E501", # Line too long ({width} > {limit} characters)
+  "E701", # Multiple statements on one line (colon)
+  "E731", # Do not assign a lambda expression, use a def
+  "PLR0904", # too-many-public-methods
+  "PLR0911", # Too many return statements
+  "PLR0912", # Too many branches
+  "PLR0913", # Too many arguments in function definition
+  "PLR0915", # Too many statements
+  "PLR0917", # too-many-positional-arguments
+  "PLR1714", # consider-using-in
+  "PLR2004", # Magic value used instead of constant
+  "PLR5501", # else-if-used
+  "PLW0603", # Using the global statement
+  "PLW2901", # redefined-loop-name
+  "PLC0415", # import-outside-top-level
 ]
-
 fixable = ["ALL"]
+unfixable = ["F401"]
+isort.split-on-trailing-comma = false
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
@@ -125,18 +156,25 @@ line-ending = "auto"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+nomad_llm_extraction = ["config/*.yaml"]
+
 [project.entry-points.'nomad.plugin']
+llm_data_extractor_action = "nomad_llm_extraction.actions:llm_extractor_action_entry_point"
+llm_extractor_schema = "nomad_llm_extraction.schema_packages:llm_extractor"
 
-schema_package_entry_point = "nomad_llm_extraction.schema_packages:schema_package_entry_point"
-
-app_entry_point = "nomad_llm_extraction.apps:app_entry_point"
-example_upload_entry_point = "nomad_llm_extraction.example_uploads:example_upload_entry_point"
-action_entry_point = "nomad_llm_extraction.actions:simple_action_entry_point"
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [tool.cruft]
 # Avoid updating workflow files, this leads to permissions issues
 skip = [".github/*"]
+
+
+[project.scripts]
+nomad-extract = "nomad_llm_extraction.run:main_cli"
