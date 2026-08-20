@@ -159,6 +159,12 @@ class ExtractionWorkflowInput(BaseModel):
         default=None,
         description='Extraction schema used to guide the LLM structured output.',
     )
+    schema_config: NomadSchemaConfig | InlineSchemaConfig | None = Field(
+        default=None,
+        description=(
+            'Configuration used to generate an extraction schema when one is not provided.'
+        ),
+    )
     prompt: str | None = Field(
         default=None,
         description='Prebuilt prompt; when set, prompt building from text is skipped.',
@@ -201,7 +207,3 @@ class ExtractionWorkflowOutput(BaseModel):
         default=0,
         description='Number of retry attempts made for the LLM call after initial failure.',
     )
-
-
-class GeneralExtractionWorkflowInput(ExtractionWorkflowInput):
-    schema_config: NomadSchemaConfig | InlineSchemaConfig

@@ -19,8 +19,8 @@ with workflow.unsafe.imports_passed_through():
         upload_to_nomad,
     )
     from nomad_llm_extraction.pipeline.workflows import (
-        GeneralExtractionWorkflow,
-        GeneralExtractionWorkflowInput,
+        ExtractionWorkflow,
+        ExtractionWorkflowInput,
     )
     from nomad_llm_extraction.utils.utils import load_yaml_config
 
@@ -46,10 +46,10 @@ async def start_worker():
     return client, worker, worker_task
 
 
-async def run_extraction_workflow(config: GeneralExtractionWorkflowInput):
+async def run_extraction_workflow(config: ExtractionWorkflowInput):
     client, worker, worker_task = await start_worker()
     result = await client.execute_workflow(
-        GeneralExtractionWorkflow.run,
+        ExtractionWorkflow.run,
         config,
         id='general-extraction-workflow',
         task_queue='general_extraction_pipeline',
@@ -58,11 +58,11 @@ async def run_extraction_workflow(config: GeneralExtractionWorkflowInput):
     return result
 
 
-def extract(config: str | dict[str, Any] | GeneralExtractionWorkflowInput):
+def extract(config: str | dict[str, Any] | ExtractionWorkflowInput):
     if isinstance(config, str):
         config = load_yaml_config(config)
     if isinstance(config, dict):
-        config = GeneralExtractionWorkflowInput(**config)
+        config = ExtractionWorkflowInput(**config)
     print('Starting extraction workflow with config:')
     print(config)
     result = asyncio.run(run_extraction_workflow(config))

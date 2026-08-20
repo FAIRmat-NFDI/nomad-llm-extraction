@@ -43,7 +43,9 @@ ModelAliases = {
 }
 from typing import Any
 
-from nomad_llm_extraction.pipeline.models import GeneralExtractionWorkflowInput
+from nomad_llm_extraction.pipeline.models import (
+    ExtractionWorkflowInput as PipelineExtractionWorkflowInput,
+)
 
 
 class ActionFileHandlerInput(BaseModel):
@@ -64,7 +66,7 @@ class ActionFileHandlerInput(BaseModel):
     )
 
 
-class ExtractionWorkflowInput(GeneralExtractionWorkflowInput):
+class ExtractionWorkflowInput(PipelineExtractionWorkflowInput):
     upload_id: str = Field(
         ...,
         description='Unique identifier for the project associated with the action.',
