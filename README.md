@@ -8,6 +8,109 @@ with any JSON schema, or integrated with [NOMAD](https://nomad-lab.eu/) where NO
 `m_def` schemas serve as the schema source and domain-specific postprocessors map the
 LLM output to NOMAD archive shapes.
 
+## Command-line extraction
+
+Install the published package:
+
+```sh
+pip install nomad-llm-extraction
+```
+
+The installed `nomad-extract` command starts a local Temporal worker and runs the
+extraction workflow. It reads `temporal.toml` by default; set
+`TEMPORAL_CONFIG_PATH` to use a different Temporal client configuration.
+
+Start with a YAML configuration such as:
+
+```yaml
+llm_engine_config:
+  model_name: claude-sonnet-4-6
+  api_key: YOUR_API_KEY
+  api_url: null
+
+schema_config:
+  inline_schema:
+    type: object
+    properties:
+      material:
+        type: string
+
+text: "The sample is a perovskite thin film."
+system_prompt: ""
+instruction_text: ""
+max_retry_attempts: 3
+output_path: extraction_result.json
+```
+
+`llm_engine_config.model_name` is required; `api_key` and `api_url` configure the
+chosen LLM endpoint. Provide either `text`, `pdf_path`, or a prebuilt `prompt`.
+Provide `extraction_schema` directly, or set `schema_config` to either an inline/schema
+file configuration (`inline_schema` or `schema_path`) or a NOMAD schema configuration
+(`m_def`). Schema options include `remove_defs`, `resolve_allOf`, `remove_null_anyof`,
+`exclude`, and `multi_instance_field`; NOMAD schemas also accept `unit_value`.
+`system_prompt`, `instruction_text`, `llm_engine_optional_params`, and
+`max_retry_attempts` control the request and retries.
+
+Run the configuration:
+
+```sh
+nomad-extract extract config.yaml
+```
+
+Compose a base configuration with an override file:
+
+```sh
+nomad-extract extract config.yaml --override_file production.yaml
+```
+
+Override individual YAML values with repeatable dotted paths. Values are parsed as YAML,
+so quote strings where needed:
+
+```sh
+nomad-extract extract config.yaml \
+  --set llm_engine_config.model_name=gpt-4o \
+  --set max_retry_attempts=5 \
+  --set 'schema_config.remove_defs=true'
+```
+
+Inspect the merged configuration without changing the source files by writing it before
+the workflow runs:
+
+```sh
+nomad-extract extract config.yaml \
+  --override_file production.yaml \
+  --write_config effective-config.yaml
+```
+
+Common direct overrides are `--pdf_path`, `--text`, `--model_name`, `--api_url`,
+`--api_key`, `--m_def`, and `--output_path`. The resulting extracted data is written as
+indented JSON to `output_path` (or `extraction_result.json` when it is absent).
+
+To also create NOMAD entries, add `--nomad` and configure `nomad_upload_config` with
+at least `m_def` and `entry_name`; it may also contain `doi`, `extraction_metadata`,
+`multi_instance_field`, and `upload_id`. The JSON output is written before the NOMAD
+upload is attempted.
+
+### Python API
+
+Pass a YAML path, mapping, or `ExtractionWorkflowInput` to `extract`:
+
+```python
+from nomad_llm_extraction.pipeline.extract import extract
+
+result = extract('config.yaml')
+if result.err_message is None:
+    print(result.extracted_data)
+```
+
+The returned `ExtractionWorkflowOutput` includes `extracted_data`, the LLM
+`raw_output`, `err_message`, `retry_prompt`, and `retries`.
+
+For NOMAD action installation and UI use, see the [action README](src/nomad_llm_extraction/actions/llm_extractor/README.md).
+Developers extending workflow behavior should read the
+[pipeline workflow guide](docs/how_to/extending_pipeline_workflows.md) and
+[action workflow guide](docs/how_to/extending_action_workflows.md).
+
 ## Development
 
 If you want to develop locally this plugin, clone the project and in the plugin folder, create a virtual environment (you can use Python 3.10, 3.11 or 3.12):
