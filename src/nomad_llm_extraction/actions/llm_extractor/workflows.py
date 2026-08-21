@@ -30,10 +30,8 @@ with workflow.unsafe.imports_passed_through():
         ProcessNewFilesInput,
     )
     from nomad_llm_extraction.actions.llm_extractor.utils import (
+        create_extraction_config,
         create_extraction_metadata,
-    )
-    from nomad_llm_extraction.config import (
-        DEFAULT_EXTRACTION_ACTION_CONFIG as DEFAULT_CONFIG,
     )
     from nomad_llm_extraction.pipeline.workflows import ExtractionWorkflow
     from nomad_llm_extraction.pipeline.workflows import (
@@ -102,27 +100,8 @@ class ExtractionActionWorkflow:
         workflow.logger.info(
             f'Running LLM extraction action workflow for upload {data.upload_id}'
         )
-        extraction_config = deepcopy(DEFAULT_CONFIG)
-        if data.extract_multiple_instances:
-            multi_instance_field = 'extracted_instances'
-        else:
-            multi_instance_field = None
-        extraction_config['schema_config'].update(
-            {
-                'm_def': data.extraction_m_def,
-                'multi_instance_field': multi_instance_field,
-            }
-        )
-        extraction_config['llm_engine_config'].update(
-            {
-                'api_key': data.api_token,
-                'model_name': data.model_technical_name,
-                'api_url': data.api_base_url,
-            }
-        )
-        extraction_config['extraction_metadata'].update(
-            {'model_name': data.model_name or data.model}
-        )
+
+        extraction_config = create_extraction_config(data)
         extraction_workflow_input = ExtractionWorkflowInput(
             upload_id=data.upload_id,
             user_id=data.user_id,
@@ -483,9 +462,15 @@ class ExtractTextWorkflow:
         workflow.logger.info(
             f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}'
         )
-        extraction_metadata = create_extraction_metadata(
-            data.llm_engine_config.model_name, data.extraction_metadata
+        # extraction_metadata = create_extraction_metadata(
+        #     data.llm_engine_config.model_name, data.extraction_metadata
+        # )
+        extraction_metadata = data.extraction_metadata or create_extraction_metadata(
+            data.llm_engine_config.model_name, {}
         )
+        schema_id = extraction_workflow_input.extraction_schema.get('$id')
+        if schema_id:
+            extraction_metadata['schema'] = schema_id
         processed_extractions = process_to_nomad(
             m_def=extraction_workflow_input.schema_config.m_def,
             data=extraction_result.extracted_data,

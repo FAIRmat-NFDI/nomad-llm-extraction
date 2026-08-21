@@ -1,27 +1,30 @@
 import io
 import json
 import os
+import urllib.parse
 from typing import Any
 
 import requests
 from loguru import logger
 
-from nomad_llm_extraction.config import DEFAULT_EXTRACTION_METADATA
+from nomad_llm_extraction.config import DEFAULT_EXTRACTION_METADATA, NOMAD_URL
 
-NOMAD_URL = os.getenv('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/')
+AUTH_URL = urllib.parse.urljoin(NOMAD_URL, 'auth/token')
+UPLOAD_URL = urllib.parse.urljoin(NOMAD_URL, 'uploads/')
+
 NOMAD_USERNAME = os.getenv('NOMAD_USERNAME', 'your_nomad_username')
 NOMAD_PASSWORD = os.getenv('NOMAD_PASSWORD', 'your_nomad_password')
 
 
 def get_authentication_token(
-    nomad_url: str = NOMAD_URL,
+    url: str = AUTH_URL,
     username: str = NOMAD_USERNAME,
     password: str = NOMAD_PASSWORD,
 ) -> str | None:
     """Get the token for accessing your NOMAD unpublished uploads remotely"""
     body = {'username': username, 'password': password, 'grant_type': 'password'}
     try:
-        response = requests.post(nomad_url + 'auth/token', data=body, timeout=10)
+        response = requests.post(url, data=body, timeout=10)
         token = response.json().get('access_token')
         if token:
             return token
@@ -50,7 +53,7 @@ def push_to_nomad(
         file_name = entry_name_format.format(index=index) + '.archive.json'
         if upload_id is None:
             res = requests.post(
-                f'{NOMAD_URL}uploads/',
+                UPLOAD_URL,
                 headers={
                     'Authorization': f'Bearer {token}',
                     'Accept': 'application/json',
@@ -61,7 +64,7 @@ def push_to_nomad(
             )
         else:
             res = requests.put(
-                f'{NOMAD_URL}uploads/{upload_id}/raw/',
+                urllib.parse.urljoin(UPLOAD_URL, f'{upload_id}/raw/'),
                 headers={
                     'Authorization': f'Bearer {token}',
                     'Accept': 'application/json',

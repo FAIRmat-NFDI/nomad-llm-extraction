@@ -24,6 +24,7 @@ class LLMExtractionInput(Schema):
                     'extraction_m_def',
                     'text',
                     'delete_source_pdfs',
+                    'extract_multiple_instances',
                 ]
             )
         ),
@@ -53,6 +54,11 @@ class LLMExtractionInput(Schema):
         type=bool,
         default=True,
         description='Whether to delete the source PDF files after processing.',
+    )
+    extract_multiple_instances = Quantity(
+        type=bool,
+        default=True,
+        description='Whether to extract multiple instances of the schema from the text.',
     )
 
 

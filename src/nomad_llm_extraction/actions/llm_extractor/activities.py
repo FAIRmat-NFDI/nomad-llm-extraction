@@ -145,26 +145,49 @@ async def dump_extractions(input_data: ActionFileHandlerInput):
     return save_paths
 
 
+def get_upload(upload_id: str, user_id: str):
+    from nomad.actions.manager import get_upload_files
+    from nomad.processing.data import Upload
+
+    upload_files = get_upload_files(
+        upload_id,
+        user_id,
+    )
+    if upload_files is None:
+        return (
+            None,
+            None,
+            f'Upload files not found or can not be accessed for upload ID: {upload_id}',
+        )
+    for i in range(MAX_ATTEMPT_NUM):
+        upload = Upload.get(upload_id)
+
+        if not upload.process_running:
+            break
+        else:
+            # reload if upload is busy
+            time.sleep(0.5)
+    else:
+        return (
+            None,
+            None,
+            f'Upload with ID {upload_id} is busy or could not be accessed.',
+        )
+    return upload, upload_files, None
+
+
 @activity.defn(name=f'{ACTION_NAME}.process_new_files')
 async def process_new_files(data: ProcessNewFilesInput) -> dict:
     """Process newly created entries in the upload, then return their references."""
-    from nomad.actions.manager import action_instance_artifacts_dir, get_upload_files
-    from nomad.app.v1.routers.uploads import get_upload_with_read_access
-    from nomad.datamodel import User
-    from nomad.processing.data import Upload
     from nomad.utils import generate_entry_id
 
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
     )
-    upload_files = get_upload_files(
-        data.upload_id,
-        data.user_id,
-    )
-    if upload_files is None:
-        error_msg = f'Upload files not found or can not be accessed for upload ID: {data.upload_id}'
-        logger.error(error_msg)
-        return {'refs': [], 'success': False, 'errors': [error_msg]}
+    upload, upload_files, error = get_upload(data.upload_id, data.user_id)
+    if error:
+        logger.error(error)
+        return {'refs': [], 'success': False, 'errors': [error]}
 
     file_operations = []
     proc_file_paths = []
@@ -179,27 +202,6 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         )
         proc_file_paths.append([path, path.replace('temp_results/', 'results/')])
 
-    # Wait until the upload is not busy
-    for i in range(MAX_ATTEMPT_NUM):
-        upload_files = get_upload_files(data.upload_id, data.user_id)
-        if upload_files is None:
-            error_msg = f'Upload files not found or can not be accessed for upload ID: {data.upload_id}'
-            logger.error(error_msg)
-            return {'refs': [], 'success': False, 'errors': [error_msg]}
-        upload = Upload.get(data.upload_id)
-
-        if not upload.process_running:
-            break
-        else:
-            # reload if upload is busy
-            time.sleep(0.5)
-            logger.warning('Upload is currently being processed. Waiting...')
-    else:
-        error_msg = (
-            f'Upload {data.upload_id} is busy for too long. Cannot process new files.'
-        )
-        logger.error(error_msg)
-        return {'refs': [], 'success': False, 'errors': [error_msg]}
     handle = upload.process_upload(
         file_operations=file_operations,
         path_filter='results',
@@ -233,24 +235,15 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     """
     Save the extraction output to a JSON file in the upload.
     """
-    from nomad.actions.manager import get_upload_files
-    from nomad.processing.data import Upload
 
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
     )
-    for i in range(MAX_ATTEMPT_NUM):
-        upload_files = get_upload_files(input_data.upload_id, input_data.user_id)
-        upload = Upload.get(input_data.upload_id)
-    if upload_files is None:
-        logger.error(
-            f'Upload files not found or can not be accessed for upload ID: {input_data.upload_id}'
-        )
-        return {
-            'success': False,
-            'errors': [f'Upload files not found for upload ID: {input_data.upload_id}'],
-        }
-    file_name = 'extraction_output.archive.json'
+    upload, upload_files, error = get_upload(input_data.upload_id, input_data.user_id)
+    if error:
+        logger.error(error)
+        return {'success': False, 'errors': [error]}
+    file_name = input_data.name or f'extraction_output_{int(time.time())}.json'
     output_path = f'temp/{file_name}'
     if not upload_files.raw_path_exists('temp'):
         upload_files.raw_create_directory('temp')

@@ -1,8 +1,28 @@
+import os
 import pathlib
+import urllib.parse
 from importlib.resources import as_file, files
+
+from loguru import logger
 
 from nomad_llm_extraction.utils.utils import get_repo_metadata, load_yaml_config
 
+try:
+    from nomad.config import config
+
+    NOMAD_URL = urllib.parse.urljoin(
+        config.client.url,
+        'v1/',
+    )
+
+except Exception:
+    NOMAD_URL = (
+        os.environ.get('deployment_url')
+        or os.environ.get('NOMAD_URL')
+        or 'https://nomad-lab.eu/prod/v1/api/v1/'
+    )
+
+logger.info(f'Using NOMAD_URL: {NOMAD_URL}')
 commit_hash, commit_url = get_repo_metadata()
 DEFAULT_EXTRACTION_METADATA = {
     'model_name': 'LLM Extracted',

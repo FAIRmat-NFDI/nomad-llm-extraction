@@ -22,6 +22,7 @@ ModelName = Literal[
     'Gemini 3.5 Flash',
 ]  # Restricted set of LLM model names supported.
 
+NoModel = Literal['N/A']
 ModelAliases = {
     'Claude Sonnet 5': 'claude-sonnet-5',
     'GPT OSS 20b': 'gpt-oss-20b',
@@ -107,7 +108,7 @@ class ExtractionActionInput(BaseModel):
         ..., description='Unique identifier for the user who initiated the action.'
     )
     api_token: SecretStr = Field(..., description='API token for LLM access.')
-    model: ModelName = Field(
+    model: ModelName | NoModel = Field(
         'Claude Sonnet 4.6', description='LLM model to be used for extraction.'
     )
     api_base_url: str | None = Field(
@@ -146,12 +147,19 @@ class ExtractionActionInput(BaseModel):
 
     @property
     def model_technical_name(self):
-        prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
         if self.model_name is not None:
-            print(f'Using model_name: {self.model_name}')
-            return prefix + self.model_name
+            self.model = 'N/A'  # Ignore the model from the drop-down menu if model_name is provided
+            model_name = self.model_name
+        elif self.model == 'N/A':
+            raise ValueError(
+                'No model specified. Please provide a model name or select a model from the list.'
+            )
         else:
-            return prefix + ModelAliases[self.model]
+            model_name = ModelAliases[self.model]
+        if model_name.startswith('openai/'):
+            return model_name
+        prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
+        return f'{prefix}{model_name}'
 
 
 class SingleExtractionInput(BaseModel):

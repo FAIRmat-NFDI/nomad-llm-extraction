@@ -1,35 +1,8 @@
-import logging
-import os
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal
 
 import litellm
 from litellm import get_supported_openai_params, supports_response_schema
 from loguru import logger
-from pydantic import BaseModel
-
-T = TypeVar('T', bound=BaseModel)
-
-try:
-    # Disable litellm error output
-    litellm.suppress_debug_info = True
-    litellm.set_verbose = False
-
-    logging.getLogger('LiteLLM').setLevel(logging.CRITICAL)
-    from litellm.caching.caching import Cache
-
-    litellm.cache = Cache(
-        type='redis',
-        host=os.environ.get('REDIS_HOST', '127.0.0.1'),
-        port=int(os.environ.get('REDIS_PORT', '6379')),
-        ttl=int(os.environ.get('REDIS_TTL', '1000000')),
-        password=os.environ.get('REDIS_PASSWORD'),
-        namespace='litellm',
-    )
-except Exception:
-    print(
-        "Error importing LiteLLM. Make sure it's installed and configured properly if you intend to use it."
-    )
-    pass
 
 
 def format_tool_call_schema(schema: dict[str, Any]) -> dict:

@@ -4,11 +4,8 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from nomad_llm_extraction.transform.utils import (
-    get_nomad_schema,
-    prune_schema,
-    resolve_schema,
-)
+from nomad_llm_extraction.transform.utils import prune_schema, resolve_schema
+from nomad_llm_extraction.utils.utils import get_nomad_schema
 
 # Define a type for schema optimization functions
 SchemaOptimizer = Callable[[dict[str, Any]], dict[str, Any]]
@@ -111,6 +108,8 @@ class NomadSchemaSource(SchemaSource):
             exclude=exclude,
             multi_instance_field=multi_instance_field,
         )
-        self._m_def = m_def
         self._unit_value = unit_value
         self._schema = get_nomad_schema(m_def, unit_value=unit_value)
+        self._m_def = self._schema.get(
+            '$id', m_def
+        )  # Use $id if available, else fallback to m_def

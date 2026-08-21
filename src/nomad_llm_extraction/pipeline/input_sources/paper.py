@@ -8,6 +8,7 @@ Example Usage:
     text = grobid_parse("path/to/paper.pdf", api_url="http://localhost:8080/api")
 """
 
+import tempfile
 from pathlib import Path
 
 import pymupdf
@@ -48,11 +49,14 @@ class PDFParser:
             )
         self.parser = parsers[parse_method]
         if self.use_cache:
-            self.cache = (
-                Cache(self.cache_dir)
-                if self.cache_dir
-                else Cache(Path.home() / '.pdf_parser_cache')
-            )
+            try:
+                self.cache = (
+                    Cache(self.cache_dir)
+                    if self.cache_dir
+                    else Cache(Path(tempfile.gettempdir()) / '.pdf_parser_cache')
+                )
+            except Exception as e:
+                logger.error(f'Failed to initialize cache: {e}')
         logger.info(f'PDFParser initialized with method: {parse_method}')
 
     def parse_pdf(self, pdf_path: str | Path) -> str | None:

@@ -2,6 +2,7 @@ import hashlib
 import inspect
 import json
 import subprocess
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
@@ -9,10 +10,13 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import pdf2doi
+import requests
 import yaml
 from jsonschema import ValidationError, validate
 from loguru import logger
 from nomad.units import ureg as nomad_ureg
+
+from nomad_llm_extraction.config import NOMAD_URL
 
 
 def convert_to_nomad_unit(value, from_unit, to_unit):
@@ -165,3 +169,17 @@ def get_repo_metadata():
     except FileNotFoundError:
         logger.error('Git is not installed or not found in the system PATH.')
         return None, None
+
+
+def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
+    schema_url = urllib.parse.urljoin(NOMAD_URL, f'schemas/{m_def}?format=jsonschema')
+    if unit_value:
+        schema_url += '&unit_value=true'
+    response = requests.get(schema_url)
+    if response.status_code == 200:
+        schema = response.json()
+        return schema
+    else:
+        raise ValueError(
+            f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
+        )

@@ -2,27 +2,15 @@ import asyncio
 import json
 import os
 import re
+import urllib.parse
 from copy import deepcopy
 from typing import Any, Literal
 
 import jsonref
 import requests
-from loguru import logger
 from scalpl import Cut
 
-try:
-    # NOMAD_URL = os.environ.get('NOMAD_URL', 'https://nomad-lab.eu/prod/v1/api/v1/')
-    NOMAD_URL = os.environ.get('deployment_url') or os.environ.get('NOMAD_URL')
-    if NOMAD_URL is None:
-        NOMAD_URL = 'https://nomad-lab.eu/prod/v1/api/v1/'
-        logger.error(
-            'NOMAD_URL environment variable not set, using default: https://nomad-lab.eu/prod/v1/api/v1/'
-        )
-except KeyError:
-    raise KeyError(
-        'NOMAD_URL environment variable not set. Please set it to the base URL of your NOMAD instance. '
-        'For the public NOMAD instance, use https://nomad-lab.eu/prod/v1/api/v1/'
-    )
+from nomad_llm_extraction.config import NOMAD_URL
 
 
 def check_path(c_data, path):
@@ -240,18 +228,6 @@ def resolve_schema(
     return json.loads(json.dumps(schema))
 
 
-def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
-    schema_url = f'{NOMAD_URL}schemas/{m_def}?format=jsonschema'
-    if unit_value:
-        schema_url += '&unit_value=true'
-    response = requests.get(schema_url)
-    if response.status_code == 200:
-        schema = response.json()
-        return schema
-    else:
-        raise ValueError(
-            f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
-        )
 
 
 def get_name_from_id(section_id):
