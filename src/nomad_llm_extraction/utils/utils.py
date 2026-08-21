@@ -1,13 +1,11 @@
 import hashlib
 import inspect
 import json
-import subprocess
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 import pdf2doi
 import requests
@@ -15,8 +13,6 @@ import yaml
 from jsonschema import ValidationError, validate
 from loguru import logger
 from nomad.units import ureg as nomad_ureg
-
-from nomad_llm_extraction.config import NOMAD_URL
 
 
 def convert_to_nomad_unit(value, from_unit, to_unit):
@@ -136,43 +132,10 @@ def get_temporal_activities(stages) -> list[tuple[str, Callable[..., Any]]]:
     return temporal_activities
 
 
-def get_repo_metadata():
-    try:
-        commit_hash = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'], stderr=subprocess.STDOUT, text=True
-        ).strip()
-
-        remote_url = subprocess.check_output(
-            ['git', 'config', '--get', 'remote.origin.url'],
-            stderr=subprocess.STDOUT,
-            text=True,
-        ).strip()
-
-        if remote_url.startswith('git@github.com:'):
-            repo_path = remote_url.removeprefix('git@github.com:')
-        else:
-            parsed = urlsplit(remote_url)
-            if parsed.hostname != 'github.com':
-                logger.warning('Origin is not a GitHub remote; omitting commit URL.')
-                return commit_hash, None
-            repo_path = parsed.path.lstrip('/')
-
-        repo_path = repo_path.removesuffix('.git')
-        return commit_hash, f'https://github.com/{repo_path}/tree/{commit_hash}'
-
-    except subprocess.CalledProcessError as e:
-        logger.error(
-            "Error: Make sure you are in a git repository and 'origin' is set. message: %s",
-            e.output,
-        )
-        return None, None
-    except FileNotFoundError:
-        logger.error('Git is not installed or not found in the system PATH.')
-        return None, None
-
-
 def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
-    schema_url = urllib.parse.urljoin(NOMAD_URL, f'schemas/{m_def}?format=jsonschema')
+    from nomad_llm_extraction.config import NOMAD_URL
+
+    schema_url = NOMAD_URL + f'schemas/{m_def}?format=jsonschema'
     if unit_value:
         schema_url += '&unit_value=true'
     response = requests.get(schema_url)

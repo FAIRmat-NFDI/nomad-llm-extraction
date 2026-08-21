@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import urllib.parse
 from typing import Any
 
 import requests
@@ -9,8 +8,8 @@ from loguru import logger
 
 from nomad_llm_extraction.config import DEFAULT_EXTRACTION_METADATA, NOMAD_URL
 
-AUTH_URL = urllib.parse.urljoin(NOMAD_URL, 'auth/token')
-UPLOAD_URL = urllib.parse.urljoin(NOMAD_URL, 'uploads/')
+AUTH_URL = NOMAD_URL + 'auth/token'
+UPLOAD_URL = NOMAD_URL + 'uploads/'
 
 NOMAD_USERNAME = os.getenv('NOMAD_USERNAME', 'your_nomad_username')
 NOMAD_PASSWORD = os.getenv('NOMAD_PASSWORD', 'your_nomad_password')
@@ -64,7 +63,7 @@ def push_to_nomad(
             )
         else:
             res = requests.put(
-                urllib.parse.urljoin(UPLOAD_URL, f'{upload_id}/raw/'),
+                UPLOAD_URL + f'{upload_id}/raw/',
                 headers={
                     'Authorization': f'Bearer {token}',
                     'Accept': 'application/json',

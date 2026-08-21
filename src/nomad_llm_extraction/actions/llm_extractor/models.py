@@ -20,9 +20,9 @@ ModelName = Literal[
     'Gemini 3 Flash',
     'Gemini 3.6 Flash',
     'Gemini 3.5 Flash',
+    'N/A',
 ]  # Restricted set of LLM model names supported.
-
-NoModel = Literal['N/A']
+NoModelName = str
 ModelAliases = {
     'Claude Sonnet 5': 'claude-sonnet-5',
     'GPT OSS 20b': 'gpt-oss-20b',
@@ -108,7 +108,7 @@ class ExtractionActionInput(BaseModel):
         ..., description='Unique identifier for the user who initiated the action.'
     )
     api_token: SecretStr = Field(..., description='API token for LLM access.')
-    model: ModelName | NoModel = Field(
+    model: ModelName = Field(
         'Claude Sonnet 4.6', description='LLM model to be used for extraction.'
     )
     api_base_url: str | None = Field(
@@ -152,7 +152,7 @@ class ExtractionActionInput(BaseModel):
             model_name = self.model_name
         elif self.model == 'N/A':
             raise ValueError(
-                'No model specified. Please provide a model name or select a model from the list.'
+                'No model specified and no model name provided. Please provide a model name or select a model from the list.'
             )
         else:
             model_name = ModelAliases[self.model]
@@ -160,27 +160,6 @@ class ExtractionActionInput(BaseModel):
             return model_name
         prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
         return f'{prefix}{model_name}'
-
-
-class SingleExtractionInput(BaseModel):
-    """Data for extraction from a single pdf file."""
-
-    upload_id: str = Field(
-        ...,
-        description='Unique identifier for the project associated with the action.',
-    )
-    user_id: str = Field(
-        ..., description='Unique identifier for the user who initiated the action.'
-    )
-    pdf: str = Field(..., description='Path to the PDF file to be processed.')
-    api_token: SecretStr = Field(..., description='API token for LLM access.')
-    model: ModelName = Field(
-        'claude-4-sonnet-20250514', description='LLM model to be used for extraction.'
-    )
-
-    @field_serializer('api_token', when_used='json')
-    def dump_secret(self, v):
-        return v.get_secret_value()
 
 
 class ProcessNewFilesInput(BaseModel):
@@ -209,54 +188,3 @@ class CleanupInput(BaseModel):
         ..., description='Unique identifier for the user who initiated the action.'
     )
     pdfs: list[str] = Field(..., description='Paths to the PDF files to be removed.')
-
-
-class LLMEngineConfig(BaseModel):
-    """Configuration for the LLM engine."""
-
-    model_name: ModelName = Field(
-        'claude-4-sonnet-20250514', description='LLM model to be used for extraction.'
-    )
-    api_key: SecretStr = Field(..., description='API token for LLM access.')
-    api_url: str | None = Field(
-        None, description='Custom API URL for the LLM endpoint, if applicable.'
-    )
-
-    @field_serializer('api_key', when_used='json')
-    def dump_secret(self, v):
-        return v.get_secret_value()
-
-
-class SchemaConfig(BaseModel):
-    remove_defs: bool = Field(
-        False, description='Whether to remove definitions from the schema.'
-    )
-
-
-class GeneralExtractionWorkflowInput(BaseModel):
-    """Data for the general extraction workflow."""
-
-    upload_id: str = Field(
-        ...,
-        description='Unique identifier for the project associated with the action.',
-    )
-    user_id: str = Field(
-        ..., description='Unique identifier for the user who initiated the action.'
-    )
-    text: str = Field(..., description='Text extracted from the PDF to be processed.')
-    prompt: str = Field(..., description='System prompt to guide the LLM extraction.')
-    instruction_text: str = Field(
-        ..., description='Additional instructions to guide the LLM extraction.'
-    )
-    schema_config: dict = Field(
-        ...,
-        description=(
-            'Configuration for generating the extraction schema, including m_def and other parameters.'
-        ),
-    )
-    llm_engine_config: dict = Field(
-        ...,
-        description=(
-            'Configuration for the LLM engine, including API endpoint and other parameters.'
-        ),
-    )

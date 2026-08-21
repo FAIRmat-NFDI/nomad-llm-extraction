@@ -243,7 +243,9 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     if error:
         logger.error(error)
         return {'success': False, 'errors': [error]}
-    file_name = input_data.name or f'extraction_output_{int(time.time())}.json'
+    file_name = (
+        input_data.name or f'extraction_output_{int(time.time())}'
+    ) + '.archive.json'
     output_path = f'temp/{file_name}'
     if not upload_files.raw_path_exists('temp'):
         upload_files.raw_create_directory('temp')

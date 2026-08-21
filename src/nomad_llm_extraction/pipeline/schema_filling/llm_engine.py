@@ -4,6 +4,12 @@ import litellm
 from litellm import get_supported_openai_params, supports_response_schema
 from loguru import logger
 
+litellm.suppress_debug_info = True
+litellm.set_verbose = False
+import logging
+
+logging.getLogger('LiteLLM').setLevel(logging.CRITICAL)
+
 
 def format_tool_call_schema(schema: dict[str, Any]) -> dict:
     # adapted from https://github.com/567-labs/instructor/blob/47fdb2ca07119d389a3c0e8bc28b9930b814f294/instructor/v2/providers/openai/schema.py

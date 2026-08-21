@@ -1,16 +1,10 @@
-import asyncio
 import json
-import os
 import re
-import urllib.parse
 from copy import deepcopy
 from typing import Any, Literal
 
 import jsonref
-import requests
 from scalpl import Cut
-
-from nomad_llm_extraction.config import NOMAD_URL
 
 
 def check_path(c_data, path):
@@ -226,8 +220,6 @@ def resolve_schema(
     if resolve_allOf:
         schema = merge_all_of(deepcopy(schema))
     return json.loads(json.dumps(schema))
-
-
 
 
 def get_name_from_id(section_id):

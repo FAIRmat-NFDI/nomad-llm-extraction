@@ -114,7 +114,9 @@ def test_pdf_parser_caches_successful_parse_in_supplied_cache_dir(
 
     monkeypatch.setattr(paper, 'Cache', Cache)
     monkeypatch.setattr(paper, 'get_hash', lambda path: 'content-hash')
-    parser = paper.PDFParser(parse_method='fake', cache_dir=tmp_path / 'cache')
+    parser = paper.PDFParser(
+        parse_method='fake', cache_dir=tmp_path / 'cache', use_cache=True
+    )
 
     assert parser.parse_pdf(source) == 'extracted text'
     assert parser.parse_pdf(source) == 'extracted text'
@@ -142,6 +144,8 @@ def test_pdf_parser_uses_cache_hit_without_reading_source(tmp_path, monkeypatch)
         'fake',
         lambda path: pytest.fail('parser should not be called for a cache hit'),
     )
-    parser = paper.PDFParser(parse_method='fake', cache_dir=tmp_path / 'cache')
+    parser = paper.PDFParser(
+        parse_method='fake', cache_dir=tmp_path / 'cache', use_cache=True
+    )
 
     assert parser.parse_pdf(Path(source)) == 'cached text'

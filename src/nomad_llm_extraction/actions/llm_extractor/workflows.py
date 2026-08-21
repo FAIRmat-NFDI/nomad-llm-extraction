@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError
+from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from copy import deepcopy
@@ -88,102 +88,116 @@ class ExtractionActionWorkflow:
         then creates and processes new entries for each detected solar cell and deletes the
         source PDF files.
         """
-        self.events.publish(
-            ActionStreamEvent(
-                type=ActionStreamEventType.MESSAGE,
-                name='workflow_started',
-                message='workflow started.',
-                severity=ActionStreamEventSeverity.INFO,
-                timestamp=workflow.now(),
-            )
-        )
-        workflow.logger.info(
-            f'Running LLM extraction action workflow for upload {data.upload_id}'
-        )
-
-        extraction_config = create_extraction_config(data)
-        extraction_workflow_input = ExtractionWorkflowInput(
-            upload_id=data.upload_id,
-            user_id=data.user_id,
-            text=data.text,
-            delete_source_pdfs=data.delete_source_pdfs,
-            **extraction_config,
-        )
-        extraction_result = await workflow.execute_child_workflow(
-            ExtractionRouterWorkflow.run,
-            extraction_workflow_input,
-            id=f'extraction-router-workflow::{workflow.info().workflow_id}',
-        )
-        if extraction_result['success'] is False:
-            error_msg = (
-                f'Extraction workflow failed with errors: {extraction_result["errors"]}'
-            )
-            result = {'success': False, 'errors': error_msg}
-        else:
+        try:
             self.events.publish(
                 ActionStreamEvent(
                     type=ActionStreamEventType.MESSAGE,
-                    name='extraction_completed',
-                    message='Extractions completed.',
+                    name='workflow_started',
+                    message='workflow started.',
                     severity=ActionStreamEventSeverity.INFO,
                     timestamp=workflow.now(),
                 )
             )
-            extraction_output_archive = {
-                'data': {
-                    'm_def': 'nomad_llm_extraction.schema_packages.llm_extractor.LLMExtractionOutput',
-                    'extracted_data': extraction_result['refs'],
-                    'action_id': workflow.info().workflow_id,
-                    'input_data': data.model_dump(),
-                }
-            }
-            for i in ['upload_id', 'user_id', 'api_token']:
-                extraction_output_archive['data']['input_data'].pop(i, None)
-            save_result = await workflow.execute_activity(
-                save_extraction_output,
-                ActionFileHandlerInput(
-                    upload_id=data.upload_id,
-                    user_id=data.user_id,
-                    name=f'{workflow.info().workflow_id.replace(".actions:llm_extractor_action_entry_point", "")}',
-                    data=[extraction_output_archive],
-                ),
-                start_to_close_timeout=timedelta(seconds=60),
+            workflow.logger.info(
+                f'Running LLM extraction action workflow for upload {data.upload_id}'
             )
-            if save_result['success'] is False:
-                error_msg = f'Failed to save extraction output with errors: {save_result["errors"]}'
+
+            extraction_config = create_extraction_config(data)
+            extraction_workflow_input = ExtractionWorkflowInput(
+                upload_id=data.upload_id,
+                user_id=data.user_id,
+                text=data.text,
+                delete_source_pdfs=data.delete_source_pdfs,
+                **extraction_config,
+            )
+            extraction_result = await workflow.execute_child_workflow(
+                ExtractionRouterWorkflow.run,
+                extraction_workflow_input,
+                id=f'extraction-router-workflow::{workflow.info().workflow_id}',
+            )
+            if extraction_result['success'] is False:
+                error_msg = f'Extraction workflow failed with errors: {extraction_result["errors"]}'
                 result = {'success': False, 'errors': error_msg}
-            result = {'success': True, 'extraction_entries': extraction_result['refs']}
-        if not result['success'] and result.get('errors'):
+            else:
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.MESSAGE,
+                        name='extraction_completed',
+                        message='Extractions completed.',
+                        severity=ActionStreamEventSeverity.INFO,
+                        timestamp=workflow.now(),
+                    )
+                )
+                extraction_output_archive = {
+                    'data': {
+                        'm_def': 'nomad_llm_extraction.schema_packages.llm_extractor.LLMExtractionOutput',
+                        'extracted_data': extraction_result['refs'],
+                        'action_id': workflow.info().workflow_id,
+                        'input_data': data.model_dump(),
+                    }
+                }
+                for i in ['upload_id', 'user_id', 'api_token']:
+                    extraction_output_archive['data']['input_data'].pop(i, None)
+                save_result = await workflow.execute_activity(
+                    save_extraction_output,
+                    ActionFileHandlerInput(
+                        upload_id=data.upload_id,
+                        user_id=data.user_id,
+                        name=f'{workflow.info().workflow_id.replace(".actions:llm_extractor_action_entry_point", "")}',
+                        data=[extraction_output_archive],
+                    ),
+                    start_to_close_timeout=timedelta(seconds=60),
+                )
+                if save_result['success'] is False:
+                    error_msg = f'Failed to save extraction output with errors: {save_result["errors"]}'
+                    result = {'success': False, 'errors': error_msg}
+                result = {
+                    'success': True,
+                    'extraction_entries': extraction_result['refs'],
+                }
+            if not result['success'] and result.get('errors'):
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.STATE,
+                        name='extraction_failed',
+                        message=f'Extraction workflow failed with errors: {result["errors"]}',
+                        severity=ActionStreamEventSeverity.ERROR,
+                        timestamp=workflow.now(),
+                        terminal=True,
+                    )
+                )
+                await workflow.execute_activity(
+                    log_message,
+                    str(result['errors']),
+                    start_to_close_timeout=timedelta(seconds=60),
+                )
+                return result
+            workflow.logger.info(
+                f'LLM Extraction action workflow completed with result: {result}'
+            )
             self.events.publish(
                 ActionStreamEvent(
                     type=ActionStreamEventType.STATE,
-                    name='extraction_failed',
-                    message=f'Extraction workflow failed with errors: {result["errors"]}',
-                    severity=ActionStreamEventSeverity.ERROR,
+                    name='extraction_completed',
+                    message='Extraction workflow completed successfully.',
+                    severity=ActionStreamEventSeverity.SUCCESS,
                     timestamp=workflow.now(),
                     terminal=True,
                 )
             )
+            return result
+        except Exception as e:
+            error_msg = f'Extraction workflow failed with exception: {str(e)}'
             await workflow.execute_activity(
                 log_message,
-                str(result['errors']),
+                error_msg,
                 start_to_close_timeout=timedelta(seconds=60),
             )
-            return result
-        workflow.logger.info(
-            f'LLM Extraction action workflow completed with result: {result}'
-        )
-        self.events.publish(
-            ActionStreamEvent(
-                type=ActionStreamEventType.STATE,
-                name='extraction_completed',
-                message='Extraction workflow completed successfully.',
-                severity=ActionStreamEventSeverity.SUCCESS,
-                timestamp=workflow.now(),
-                terminal=True,
+            workflow.logger.error(error_msg)
+            raise ApplicationError(
+                error_msg,
+                non_retryable=True,
             )
-        )
-        return result
 
 
 @workflow.defn
@@ -373,10 +387,10 @@ class ExtractPDFWorkflow:
                     update={
                         'name': pdf.rsplit('.', 1)[0],
                         'text': pdf_text,
-                        'extraction_metadata': {'doi': doi},
                     },
                     deep=True,
                 )
+                single_extraction_input.extraction_metadata['doi'] = doi
                 extraction_result = await workflow.execute_child_workflow(
                     ExtractTextWorkflow.run,
                     single_extraction_input,
@@ -462,15 +476,8 @@ class ExtractTextWorkflow:
         workflow.logger.info(
             f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}'
         )
-        # extraction_metadata = create_extraction_metadata(
-        #     data.llm_engine_config.model_name, data.extraction_metadata
-        # )
-        extraction_metadata = data.extraction_metadata or create_extraction_metadata(
-            data.llm_engine_config.model_name, {}
-        )
-        schema_id = extraction_workflow_input.extraction_schema.get('$id')
-        if schema_id:
-            extraction_metadata['schema'] = schema_id
+
+        extraction_metadata = data.extraction_metadata
         processed_extractions = process_to_nomad(
             m_def=extraction_workflow_input.schema_config.m_def,
             data=extraction_result.extracted_data,
