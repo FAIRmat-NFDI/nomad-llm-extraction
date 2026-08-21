@@ -37,7 +37,7 @@ class PDFParser:
         self,
         parse_method: str = 'pymupdf',
         cache_dir: str | Path | None = None,
-        use_cache: bool = True,
+        use_cache: bool = False,
     ):
         self.cache_dir = cache_dir
         self.use_cache = use_cache
