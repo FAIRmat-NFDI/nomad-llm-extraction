@@ -28,9 +28,7 @@ def create_extraction_config(data: ExtractionActionInput):
             'api_url': data.api_base_url,
         }
     )
-    extraction_config['extraction_metadata'].update(
-        {'model_name': data.model_name or data.model}
-    )
+    extraction_config['extraction_metadata'].update({'model_name': data.model})
     if data.api_base_url:
         extraction_config['extraction_metadata']['api_url'] = data.api_base_url
     for key, value in DEFAULT_EXTRACTION_METADATA.items():

@@ -24,12 +24,49 @@ def log_message(message: str) -> None:
     logger.info(message)
 
 
-@activity.defn(name=f'{ACTION_NAME}.get_list_of_pdfs')
-def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
+@activity.defn(name=f'{ACTION_NAME}.get_uploaded_assets')
+def get_uploaded_assets(input_data: ActionFileHandlerInput) -> dict:
+    from nomad.actions.assets import resolve_action_asset_path
+
+    from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
+    from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
+
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
+    action_instance_id = input_data.action_instance_id
+    if not action_instance_id:
+        raise ValueError('action_instance_id is required in input_data.')
+    if input_data.action_file_refs is None:
+        raise ValueError('No action_file_refs provided in input_data.')
+    pdfs = []
+    for file_ref in input_data.action_file_refs:
+        if file_ref.media_type == 'application/pdf':
+            pdfs.append(resolve_action_asset_path(file_ref, action_instance_id))
+    if len(pdfs) == 0:
+        logger.error('No valid PDF files uploaded.')
+    else:
+        logger.info(f'{len(pdfs)} PDF files uploaded.')
+    parser = PDFParser()
+    texts = []
+    for pdf in pdfs:
+        text = parser.parse_pdf(pdf)
+        doi = extract_doi_from_pdf(pdf)
+        if not text:
+            logger.warning(f'Failed to extract text from PDF: {pdf}')
+        texts.append((pdf.stem, text, doi))
+    return {'pdfs': pdfs, 'texts': texts}
+
+
+@activity.defn(name=f'{ACTION_NAME}.get_uploaded_pdfs')
+def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
     """
     Find all PDF files in the upload if authorized user has access to the upload.
     """
     from nomad.actions.manager import get_upload_files
+
+    from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
+    from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
 
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
@@ -56,9 +93,16 @@ def get_list_of_pdfs(input_data: ActionFileHandlerInput) -> dict:
         logger.info(
             f'Found {len(pdfs)} PDF files in the upload with ID: {input_data.upload_id}'
         )
-    return {
-        'pdfs': pdfs,
-    }
+    parser = PDFParser()
+    texts = []
+    for pdf in pdfs:
+        pdf_path = upload_files.raw_file_object(pdf).os_path
+        text = parser.parse_pdf(pdf_path)
+        doi = extract_doi_from_pdf(pdf_path)
+        if not text:
+            logger.warning(f'Failed to extract text from PDF: {pdf}')
+        texts.append((pdf.replace('/', '__'), text, doi))
+    return {'pdfs': pdfs, 'texts': texts}
 
 
 @activity.defn(name=f'{ACTION_NAME}.get_config')
@@ -93,8 +137,8 @@ def get_config(input_data):
     )
 
 
-@activity.defn(name=f'{ACTION_NAME}.get_text_from_pdf')
-def get_text_from_pdf(
+@activity.defn(name=f'{ACTION_NAME}.get_text_from_pdf_upload')
+def get_text_from_pdf_upload(
     input_data: ActionFileHandlerInput,
 ) -> tuple[str | None, str | None]:
     from nomad.actions.manager import get_upload_files
