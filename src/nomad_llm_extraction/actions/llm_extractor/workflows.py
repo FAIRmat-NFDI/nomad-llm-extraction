@@ -15,8 +15,8 @@ with workflow.unsafe.imports_passed_through():
 
     from nomad_llm_extraction.actions.llm_extractor.activities import (
         dump_extractions,
-        get_list_of_pdfs,
-        get_text_from_pdf,
+        get_uploaded_assets,
+        get_uploaded_pdfs,
         log_message,
         process_new_files,
         remove_source_pdfs,
@@ -31,7 +31,6 @@ with workflow.unsafe.imports_passed_through():
     )
     from nomad_llm_extraction.actions.llm_extractor.utils import (
         create_extraction_config,
-        create_extraction_metadata,
     )
     from nomad_llm_extraction.pipeline.workflows import ExtractionWorkflow
     from nomad_llm_extraction.pipeline.workflows import (
@@ -88,6 +87,7 @@ class ExtractionActionWorkflow:
         then creates and processes new entries for each detected solar cell and deletes the
         source PDF files.
         """
+        action_instance_id = workflow.info().workflow_id
         try:
             self.events.publish(
                 ActionStreamEvent(
@@ -108,12 +108,14 @@ class ExtractionActionWorkflow:
                 user_id=data.user_id,
                 text=data.text,
                 delete_source_pdfs=data.delete_source_pdfs,
+                pdfs=data.pdfs,
+                action_instance_id=action_instance_id,
                 **extraction_config,
             )
             extraction_result = await workflow.execute_child_workflow(
                 ExtractionRouterWorkflow.run,
                 extraction_workflow_input,
-                id=f'extraction-router-workflow::{workflow.info().workflow_id}',
+                id=f'extraction-router-workflow::{action_instance_id}',
             )
             if extraction_result['success'] is False:
                 error_msg = f'Extraction workflow failed with errors: {extraction_result["errors"]}'
@@ -132,18 +134,26 @@ class ExtractionActionWorkflow:
                     'data': {
                         'm_def': 'nomad_llm_extraction.schema_packages.llm_extractor.LLMExtractionOutput',
                         'extracted_data': extraction_result['refs'],
-                        'action_id': workflow.info().workflow_id,
+                        'action_id': action_instance_id,
                         'input_data': data.model_dump(),
                     }
                 }
                 for i in ['upload_id', 'user_id', 'api_token']:
                     extraction_output_archive['data']['input_data'].pop(i, None)
+                pdf_refs = (
+                    extraction_output_archive['data']['input_data'].pop('pdfs', [])
+                    or []
+                )
+                for pdf_refs in pdf_refs:
+                    extraction_output_archive['data']['input_data'].setdefault(
+                        'pdf_refs', []
+                    ).append(pdf_refs.get('filename'))
                 save_result = await workflow.execute_activity(
                     save_extraction_output,
                     ActionFileHandlerInput(
                         upload_id=data.upload_id,
                         user_id=data.user_id,
-                        name=f'{workflow.info().workflow_id.replace(".actions:llm_extractor_action_entry_point", "")}',
+                        name=f'{action_instance_id.replace(".actions:llm_extractor_action_entry_point", "")}',
                         data=[extraction_output_archive],
                     ),
                     start_to_close_timeout=timedelta(seconds=60),
@@ -307,7 +317,7 @@ class ProcessExtractionsWorkflow:
                 workflow.logger.info(
                     f'Extraction results for {name} saved to: {save_paths}'
                 )
-            result_paths.extend(save_paths)
+                result_paths.extend(save_paths)
             input_for_processing = ProcessNewFilesInput(
                 upload_id=data.upload_id,
                 user_id=data.user_id,
@@ -348,40 +358,67 @@ class ExtractPDFWorkflow:
             maximum_attempts=3,
         )
         action_metadata = ActionFileHandlerInput(
-            upload_id=data.upload_id, user_id=data.user_id
+            upload_id=data.upload_id,
+            user_id=data.user_id,
+            action_instance_id=data.action_instance_id,
+            action_file_refs=data.pdfs,
         )
-        list_of_pdfs = await workflow.execute_activity(
-            get_list_of_pdfs,
-            action_metadata,
-            start_to_close_timeout=timedelta(seconds=60),
-            retry_policy=retry_policy,
-        )
+        use_asset_refs = data.pdfs is not None and len(data.pdfs) > 0
+        if use_asset_refs:
+            self.events.publish(
+                ActionStreamEvent(
+                    type=ActionStreamEventType.MESSAGE,
+                    name='using_provided_pdfs',
+                    message=f'Using provided list of {len(data.pdfs)} PDF files for extraction.',
+                    severity=ActionStreamEventSeverity.INFO,
+                    timestamp=workflow.now(),
+                )
+            )
+            list_of_pdfs = await workflow.execute_activity(
+                get_uploaded_assets,
+                action_metadata,
+                start_to_close_timeout=timedelta(seconds=180),
+                retry_policy=retry_policy,
+            )
+        else:
+            self.events.publish(
+                ActionStreamEvent(
+                    type=ActionStreamEventType.MESSAGE,
+                    name='finding_pdfs',
+                    message='Finding PDF files in the upload.',
+                    severity=ActionStreamEventSeverity.INFO,
+                    timestamp=workflow.now(),
+                )
+            )
+            list_of_pdfs = await workflow.execute_activity(
+                get_uploaded_pdfs,
+                action_metadata,
+                start_to_close_timeout=timedelta(seconds=180),
+                retry_policy=retry_policy,
+            )
         if not list_of_pdfs['pdfs']:
             error_msg = 'No PDF files found in the upload.'
             errors.append(error_msg)
             return {'result': {}, 'success': False, 'errors': errors}
+        if not list_of_pdfs['texts']:
+            error_msg = 'Failed to extract text from any PDF files.'
+            errors.append(error_msg)
+            return {'result': {}, 'success': False, 'errors': errors}
         pdf_errors = []
         try:
-            for pdf in list_of_pdfs['pdfs']:
-                parsed_pdf = await workflow.execute_activity(
-                    get_text_from_pdf,
-                    ActionFileHandlerInput(
-                        upload_id=data.upload_id, user_id=data.user_id, name=pdf
-                    ),
-                    start_to_close_timeout=timedelta(seconds=120),
-                    retry_policy=retry_policy,
-                )
-                pdf_text, doi = parsed_pdf
+            for pdf, pdf_text, doi in list_of_pdfs['texts']:
                 if not pdf_text:
+                    error_msg = f'Failed to read text from PDF: {pdf}'
                     self.events.publish(
                         ActionStreamEvent(
                             type=ActionStreamEventType.MESSAGE,
                             name='pdf_text_extraction_failed',
-                            message=f'Failed to read text from PDF: {pdf}',
+                            message=error_msg,
                             severity=ActionStreamEventSeverity.WARNING,
                             timestamp=workflow.now(),
                         )
                     )
+                    pdf_errors.append(error_msg)
                     continue
                 single_extraction_input = data.model_copy(
                     update={

@@ -1,0 +1,56 @@
+from functools import cache
+
+from nomad.cli.dev import _generate_metainfo
+from nomad.schemas import get_schema
+
+
+@cache
+def get_all_validmdefs():
+    from nomad.config import config
+    from nomad.config.models.plugins import SchemaPackageEntryPoint
+    from nomad.datamodel import Environment
+    from nomad.metainfo import Package
+
+    config.load_plugins()
+    if config.plugins is not None:  # Added check
+        for entry_point in config.plugins.entry_points.filtered_values():
+            if (
+                isinstance(entry_point, SchemaPackageEntryPoint)
+                and entry_point.name != 'LLMExtractor'
+            ):
+                try:
+                    entry_point.load()
+                except Exception as e:
+                    print(f'Error loading schema package {entry_point.name}: {e}')
+                    continue
+    export = Environment()
+
+    # The registry dictionary will also contain all aliases. To not repeat
+    # all of the aliases, we check that only unique values are added.
+    unique_packages = set()
+    for package in Package.registry.values():
+        if package not in unique_packages:
+            export.m_add_sub_section(Environment.packages, package)
+            unique_packages.add(package)
+    metainfo_json = _generate_metainfo(export)
+    mdefs = []
+    valid_mdefs = []
+    for i in metainfo_json['packages']:
+        mdef = i['name']
+        if mdef.startswith('pynxtools'):
+            continue
+        for s in i['section_definitions']:
+            if s.get('m_parent_sub_section') != 'inner_section_definitions':
+                mdefs.append(f'{mdef}.{s["name"]}')
+            for inner in s.get('inner_section_definitions', []):
+                mdefs.append(f'{mdef}.{s["name"]}.{inner["name"]}')
+    for mdef in mdefs:
+        try:
+            get_schema(mdef).m_to_json_schema()
+            valid_mdefs.append(mdef)
+        except Exception:
+            continue
+    return valid_mdefs
+
+
+MDEF_LIST = sorted(get_all_validmdefs())
