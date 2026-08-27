@@ -23,6 +23,7 @@ class CLI:
         api_key: str | None = None,
         m_def: str | None = None,
         output_path: str | None = None,
+        llm_extraction_method: str | None = None,
         write_config: str | None = None,
         nomad: bool = False,
         set_values: str | list[str] | None = None,
@@ -46,6 +47,7 @@ class CLI:
             api_key=api_key,
             m_def=m_def,
             output_path=output_path,
+            llm_extraction_method=llm_extraction_method,
             set_values=set_values,
         )
         workflow_input = validate_workflow_config(config)

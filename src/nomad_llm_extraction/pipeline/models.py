@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_serializer
 
@@ -86,6 +86,10 @@ class LLMCallInput(BaseModel):
         ..., description='Configuration for the LLM engine.'
     )
     optional_params: dict[str, Any] = Field(default_factory=dict)
+    llm_extraction_method: Literal['response_format', 'tool_call'] = Field(
+        'tool_call',
+        description='Method to use for LLM generation, either response_format or tool_call.',
+    )
 
 
 class ExtractionValidationInput(BaseModel):
@@ -187,6 +191,10 @@ class ExtractionWorkflowInput(BaseModel):
         ..., description='Configuration for the LLM engine.'
     )
     llm_engine_optional_params: dict[str, Any] = Field(default_factory=dict)
+    llm_extraction_method: Literal['response_format', 'tool_call'] = Field(
+        'tool_call',
+        description='Method to use for LLM generation, either response_format or tool_call.',
+    )
     max_retry_attempts: int = 3
 
 
