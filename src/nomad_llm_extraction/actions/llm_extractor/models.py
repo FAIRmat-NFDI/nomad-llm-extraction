@@ -100,8 +100,8 @@ class ExtractionWorkflowInput(PipelineExtractionWorkflowInput, ActionId):
         default=True,
         description='Whether to delete the source PDF files after processing.',
     )
-    pdfs: list[ActionAssetRef] | None = Field(
-        default=None,
+    pdfs: list[ActionAssetRef] = Field(
+        default_factory=lambda: [],
         description='List of PDF files to process. If not provided, the action will process all PDFs in the project.',
     )
 
@@ -142,8 +142,8 @@ class ExtractionActionInput(BaseModel):
             }
         },
     )
-    api_base_url: str | None = Field(
-        None,
+    api_base_url: str = Field(
+        default_factory=lambda: '',
         title='API Base URL (Optional) for example, https://openrouter.ai/.',
         description="""
         Openai compatible Base URL for the LLM API.
@@ -152,12 +152,12 @@ class ExtractionActionInput(BaseModel):
         """,
     )
 
-    text: str | None = Field(
-        default=None,
+    text: str = Field(
+        default_factory=lambda: '',
         description='Text to run the extraction on. If not provided, the action will extract text from all PDFs in the project.',
     )
-    pdfs: list[ActionAssetRef] | None = Field(
-        default=None,
+    pdfs: list[ActionAssetRef] = Field(
+        default_factory=lambda: [],
         title='PDF Files to Process',
         description='List of PDF files to process. If not provided, the action will process all PDFs in the project.',
         json_schema_extra={

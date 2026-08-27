@@ -1,4 +1,5 @@
 import json
+import shutil
 import time
 
 from nomad.utils.structlogging import get_logger
@@ -103,6 +104,34 @@ def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
             logger.warning(f'Failed to extract text from PDF: {pdf}')
         texts.append((pdf.replace('/', '__'), text, doi))
     return {'pdfs': pdfs, 'texts': texts}
+
+
+@activity.defn(name=f'{ACTION_NAME}.save_uploaded_pdfs')
+def save_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
+    """
+    Save the uploaded PDF files to a temporary directory in the upload.
+    """
+    from nomad.actions.assets import open_action_asset, resolve_action_asset_path
+
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
+    action_instance_id = input_data.action_instance_id
+    upload, upload_files, err = get_upload(input_data.upload_id, input_data.user_id)
+    if err:
+        logger.error(err)
+        return {'success': False, 'errors': [err]}
+    save_dir = 'pdfs'
+    if not upload_files.raw_path_exists(save_dir):
+        upload_files.raw_create_directory(save_dir)
+    for file_ref in input_data.action_file_refs:
+        file_path = resolve_action_asset_path(file_ref, action_instance_id)
+        with (
+            open_action_asset(file_ref, action_instance_id) as src,
+            upload.upload_files.raw_file(f'{save_dir}/{file_path.name}', 'wb') as dst,
+        ):
+            shutil.copyfileobj(src, dst)
+    return {'success': True, 'errors': []}
 
 
 @activity.defn(name=f'{ACTION_NAME}.get_config')

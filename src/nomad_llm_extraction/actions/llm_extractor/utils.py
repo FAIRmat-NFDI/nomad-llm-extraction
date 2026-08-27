@@ -25,7 +25,7 @@ def create_extraction_config(data: ExtractionActionInput):
         {
             'api_key': data.api_token,
             'model_name': data.model_technical_name,
-            'api_url': data.api_base_url,
+            'api_url': None if not data.api_base_url else data.api_base_url,
         }
     )
     extraction_config['extraction_metadata'].update({'model_name': data.model})
