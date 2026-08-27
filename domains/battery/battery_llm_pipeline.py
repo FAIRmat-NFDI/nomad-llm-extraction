@@ -129,9 +129,7 @@ class BatteryLLMExtractionWorkflow:
         return extraction_results
 
 
-async def run_extraction(
-    pdf_path: str, m_def: str, model_name: str = 'claude-4-sonnet-20250514'
-):
+async def run_extraction(pdf_path: str, model_name: str = 'claude-4-sonnet-20250514'):
     client = await Client.connect('localhost:7233')
     worker = Worker(
         client,
@@ -163,7 +161,7 @@ async def run_extraction(
 def main():
     pdf_path = 'domains/battery/battery_paper.pdf'  # Update with your PDF path
     model_name = 'claude-4-sonnet-20250514'  # Update with your desired model
-    extraction_results = asyncio.run(run_extraction(pdf_path, model_name))
+    extraction_results = asyncio.run(run_extraction(pdf_path, model_name=model_name))
     print(json.dumps(extraction_results, indent=2))
 
 
