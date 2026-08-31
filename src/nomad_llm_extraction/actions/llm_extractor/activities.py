@@ -1,4 +1,5 @@
 import json
+import shutil
 import time
 
 from nomad.utils.structlogging import get_logger
@@ -7,6 +8,7 @@ from temporalio import activity
 from nomad_llm_extraction.actions.llm_extractor.models import (
     ActionFileHandlerInput,
     CleanupInput,
+    PostProcessingInput,
     ProcessNewFilesInput,
 )
 
@@ -105,6 +107,34 @@ def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
     return {'pdfs': pdfs, 'texts': texts}
 
 
+@activity.defn(name=f'{ACTION_NAME}.save_uploaded_pdfs')
+def save_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
+    """
+    Save the uploaded PDF files to a temporary directory in the upload.
+    """
+    from nomad.actions.assets import open_action_asset, resolve_action_asset_path
+
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
+    action_instance_id = input_data.action_instance_id
+    upload, upload_files, err = get_upload(input_data.upload_id, input_data.user_id)
+    if err:
+        logger.error(err)
+        return {'success': False, 'errors': [err]}
+    save_dir = 'pdfs'
+    if not upload_files.raw_path_exists(save_dir):
+        upload_files.raw_create_directory(save_dir)
+    for file_ref in input_data.action_file_refs:
+        file_path = resolve_action_asset_path(file_ref, action_instance_id)
+        with (
+            open_action_asset(file_ref, action_instance_id) as src,
+            upload.upload_files.raw_file(f'{save_dir}/{file_path.name}', 'wb') as dst,
+        ):
+            shutil.copyfileobj(src, dst)
+    return {'success': True, 'errors': []}
+
+
 @activity.defn(name=f'{ACTION_NAME}.get_config')
 def get_config(input_data):
     from nomad.actions.manager import get_upload_files
@@ -164,6 +194,28 @@ def get_text_from_pdf_upload(
     if not text:
         logger.warning(f'Failed to extract text from PDF: {input_data.name}')
     return text, doi
+
+
+@activity.defn(name=f'{ACTION_NAME}.default_postprocessing')
+def default_postprocessing(input_data: PostProcessingInput) -> dict:
+    """
+    Apply the default post-processing pipeline to the extracted data.
+    """
+    from nomad_llm_extraction.config import ACTION_POST_PROCESSING_PIPELINE
+
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
+    try:
+        return {
+            'postprocessed_data': ACTION_POST_PROCESSING_PIPELINE.apply(
+                input_data.data,
+                input_data.postprocessing_schema,
+            )
+        }
+    except Exception as e:
+        logger.error(f'Error occurred during post-processing: {e}')
+        return {'error': str(e)}
 
 
 @activity.defn(name=f'{ACTION_NAME}.dump_extractions')

@@ -98,7 +98,7 @@ def clean_func(c_data, path, func_args):
 @pytest.fixture(scope='module')
 def resolved_schema():
     with NOMAD_SCHEMA_PATH.open() as handle:
-        return resolve_schema(json.load(handle), remove_defs=True)
+        return resolve_schema(json.load(handle), remove_defs=True, resolve_refs=True)
 
 
 @pytest.fixture(scope='module')

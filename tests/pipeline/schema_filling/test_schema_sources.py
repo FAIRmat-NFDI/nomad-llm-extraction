@@ -38,6 +38,7 @@ def test_inline_source_prunes_resolves_and_optimizes_copy(monkeypatch):
         remove_defs=True,
         resolve_allOf=True,
         remove_null_anyof=True,
+        resolve_refs=True,
         exclude={'property': ['remove']},
     )
 
@@ -58,6 +59,7 @@ def test_inline_source_prunes_resolves_and_optimizes_copy(monkeypatch):
                 'remove_defs': True,
                 'resolve_allOf': True,
                 'remove_null_anyof': True,
+                'resolve_refs': True,
             },
         ),
         ('optimize',),
@@ -71,9 +73,11 @@ def test_inline_source_wraps_single_instance_schema_after_processing(monkeypatch
     source = schema_sources.InlineSchemaSource(
         {'title': 'Sample', 'description': 'A sample.', 'type': 'object'},
         multi_instance_field='samples',
+        resolve_refs=True,
     )
 
     assert source.get_schema() == {
+        '$schema': 'https://json-schema.org/draft/2020-12/schema',
         'title': 'SampleInstances',
         'description': 'A sample.',
         'type': 'object',

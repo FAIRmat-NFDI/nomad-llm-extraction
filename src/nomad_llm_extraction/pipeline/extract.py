@@ -118,11 +118,13 @@ def apply_common_flags(
     api_key: str | None = None,
     m_def: str | None = None,
     output_path: str | None = None,
+    llm_extraction_method: str | None = None,
 ) -> None:
     for key, value in (
         ('pdf_path', pdf_path),
         ('text', text),
         ('output_path', output_path),
+        ('llm_extraction_method', llm_extraction_method),
     ):
         if value is not None:
             config[key] = value
@@ -154,6 +156,7 @@ def build_effective_config(
     api_key: str | None = None,
     m_def: str | None = None,
     output_path: str | None = None,
+    llm_extraction_method: str | None = None,
     set_values: str | list[str] | None = None,
 ) -> dict[str, Any]:
     config = load_yaml_mapping(config_path, 'base configuration')
@@ -170,6 +173,7 @@ def build_effective_config(
         api_key=api_key,
         m_def=m_def,
         output_path=output_path,
+        llm_extraction_method=llm_extraction_method,
     )
     if set_values is None:
         return config

@@ -1,12 +1,7 @@
-from typing import get_args
-
 from nomad.datamodel.data import EntryData, Schema, UseCaseElnCategory
 from nomad.datamodel.metainfo.annotations import SectionProperties
 from nomad.datamodel.metainfo.eln import ELNAnnotation
 from nomad.metainfo import Quantity, SchemaPackage, Section, SubSection
-from nomad.metainfo.metainfo import MEnum
-
-from nomad_llm_extraction.actions.llm_extractor.models import ModelName
 
 m_package = SchemaPackage()
 
@@ -19,7 +14,6 @@ class LLMExtractionInput(Schema):
             properties=SectionProperties(
                 order=[
                     'model',
-                    'model_name',
                     'api_base_url',
                     'extraction_m_def',
                     'text',
@@ -30,13 +24,9 @@ class LLMExtractionInput(Schema):
         ),
     )
     model = Quantity(
-        type=MEnum(*get_args(ModelName)),
+        type=str,
         description='LLM model to use for extraction.',
         default='Claude Sonnet 4.6',
-    )
-    model_name = Quantity(
-        type=str,
-        description='LLM model to be used for extraction.',
     )
     api_base_url = Quantity(
         type=str,

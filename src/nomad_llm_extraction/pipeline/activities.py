@@ -108,7 +108,12 @@ def llm_call(inp: LLMCallInput) -> str:
     from nomad_llm_extraction.pipeline.schema_filling.llm_engine import LiteLLMEngine
 
     llm_engine = LiteLLMEngine(**inp.engine_config.model_dump())
-    raw = llm_engine.generate(inp.prompt, inp.extraction_schema, inp.optional_params)
+    raw = llm_engine.generate(
+        prompt=inp.prompt,
+        json_schema=inp.extraction_schema,
+        optional_params=inp.optional_params,
+        method=inp.llm_extraction_method,
+    )
     return raw
 
 

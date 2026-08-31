@@ -148,6 +148,7 @@ class ExtractionWorkflow:
                         extraction_schema=inp.extraction_schema,
                         engine_config=inp.llm_engine_config,
                         optional_params=inp.llm_engine_optional_params,
+                        llm_extraction_method=inp.llm_extraction_method,
                     ),
                     id=f'llm_call_attempt_{retry_count}',
                     retry_policy=DEFAULT_RETRY_POLICY,

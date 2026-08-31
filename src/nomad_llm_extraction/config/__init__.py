@@ -6,6 +6,17 @@ from urllib.parse import urlsplit
 
 from loguru import logger
 
+from nomad_llm_extraction.transform.common_transforms import (
+    convert_unit,
+    remove_unit_value,
+    unit_args,
+    unit_cond,
+)
+from nomad_llm_extraction.transform.json_transformer import ProcessingPipeline
+from nomad_llm_extraction.utils.schema_optimization import (
+    edit_unit_value_in_schema,
+    trim_ids_refs,
+)
 from nomad_llm_extraction.utils.utils import load_yaml_config
 
 try:
@@ -97,3 +108,14 @@ if DEFAULT_EXTRACTION_ACTION_CONFIG.get('extract_multiple_instances'):
     DEFAULT_EXTRACTION_ACTION_CONFIG['schema_config']['multi_instance_field'] = (
         multi_instance_field or 'extracted_instances'
     )
+
+
+ACTION_SCHEMA_OPTIMIZER = lambda schema: edit_unit_value_in_schema(
+    trim_ids_refs(schema)
+)
+ACTION_POST_PROCESSING_PIPELINE = ProcessingPipeline(
+    {
+        'unit_conversion': [convert_unit, unit_cond, unit_args],
+        'flatten_unit_value': [remove_unit_value, None, None],
+    }
+)

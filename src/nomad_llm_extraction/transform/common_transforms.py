@@ -17,6 +17,8 @@ def convert_unit(b_data, path, unit):
             return convert_to_nomad_unit(item['value'], item['unit'], unit)
         return item
 
+    if path.split('.')[-1] == 'value':
+        return convert_unit(b_data, path.rsplit('.', 1)[0], unit)
     if b_data[path] is None:
         return b_data
     items = b_data[path]

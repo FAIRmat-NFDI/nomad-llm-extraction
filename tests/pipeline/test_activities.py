@@ -129,17 +129,14 @@ def test_build_prompt_omits_empty_optional_sections(
 
 def test_llm_call_constructs_engine_and_returns_raw_response(monkeypatch):
     constructed = []
+    generated = []
 
     class Engine:
         def __init__(self, **kwargs):
             constructed.append(kwargs)
 
-        def generate(self, prompt, schema, optional_params):
-            assert (prompt, schema, optional_params) == (
-                'prompt',
-                {'type': 'object'},
-                {'temperature': 0},
-            )
+        def generate(self, **kwargs):
+            generated.append(kwargs)
             return 'raw response'
 
     monkeypatch.setitem(
@@ -154,12 +151,21 @@ def test_llm_call_constructs_engine_and_returns_raw_response(monkeypatch):
             extraction_schema={'type': 'object'},
             engine_config=LLMEngineConfig(model_name='test-model'),
             optional_params={'temperature': 0},
+            llm_extraction_method='response_format',
         )
     )
 
     assert result == 'raw response'
     assert constructed == [
         {'model_name': 'test-model', 'api_key': None, 'api_url': None}
+    ]
+    assert generated == [
+        {
+            'prompt': 'prompt',
+            'json_schema': {'type': 'object'},
+            'optional_params': {'temperature': 0},
+            'method': 'response_format',
+        }
     ]
 
 

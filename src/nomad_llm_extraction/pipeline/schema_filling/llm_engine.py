@@ -176,10 +176,12 @@ class LiteLLMEngine(StructuredLLMEngine):
             message_content = resp.choices[0].message.tool_calls[0].function.arguments
         except (AttributeError, IndexError, TypeError, ValueError) as e:
             logger.error(
-                f'LiteLLM generation with tool call failed due to unexpected response structure: {e}'
+                f'LiteLLM generation with tool call failed due to unexpected response structure: {e} returned response: {resp}'
             )
             raise
         except Exception as e:
-            logger.error(f'LiteLLM generation with tool call failed: {e}')
+            logger.error(
+                f'LiteLLM generation with tool call failed: {e} returned response: {resp}'
+            )
             raise
         return message_content

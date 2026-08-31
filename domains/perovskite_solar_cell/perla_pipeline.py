@@ -98,7 +98,6 @@ class PerlaCompleteWorkflow:
         extraction_workflow_input = ExtractionWorkflowInput(
             pdf_path=inp.pdf_path,
             extraction_schema=extraction_schema,
-            pdf_parser_method='pymupdf',
             system_prompt=SYSTEM_PROMPT,
             instruction_text=INSTRUCTION_TEXT,
             llm_engine_config={'model_name': inp.model_name},
