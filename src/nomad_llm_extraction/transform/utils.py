@@ -207,14 +207,19 @@ def _remove_null_anyof(schema):
 
 
 def resolve_schema(
-    schema, remove_defs=False, resolve_allOf=False, remove_null_anyof=False
+    schema,
+    remove_defs=False,
+    resolve_allOf=False,
+    remove_null_anyof=False,
+    resolve_refs=False,
 ):
     """
     Resolves a JSON schema by replacing references and optionally merging 'allOf' lists and removing '$defs'.
     """
     if remove_null_anyof:
         schema = _remove_null_anyof(schema)
-    schema = dict(jsonref.replace_refs(schema, jsonschema=True, proxies=False))
+    if resolve_refs:
+        schema = dict(jsonref.replace_refs(schema, jsonschema=True, proxies=False))
     if remove_defs and '$defs' in schema:
         del schema['$defs']
     if resolve_allOf:

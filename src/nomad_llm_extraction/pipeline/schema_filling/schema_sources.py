@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from nomad_llm_extraction.transform.utils import prune_schema, resolve_schema
-from nomad_llm_extraction.utils.utils import get_nomad_schema
+from nomad_llm_extraction.utils.utils import get_nomad_schema_api
 
 # Define a type for schema optimization functions
 SchemaOptimizer = Callable[[dict[str, Any]], dict[str, Any]]
@@ -15,6 +15,7 @@ class SchemaSource:
     def __init__(
         self,
         optimizer: SchemaOptimizer | None = None,
+        resolve_refs: bool = False,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
@@ -23,6 +24,7 @@ class SchemaSource:
     ) -> None:
         self._schema: dict[str, Any] | None = None
         self._optimizer = optimizer
+        self._resolve_refs = resolve_refs
         self._remove_defs = remove_defs
         self._resolve_allOf = resolve_allOf
         self._remove_null_anyof = remove_null_anyof
@@ -38,11 +40,13 @@ class SchemaSource:
         if self._exclude is not None:
             for prune_type, prune_values in self._exclude.items():
                 schema = prune_schema(schema, prune_values, by=prune_type)
+
         schema = resolve_schema(
             schema,
             remove_defs=self._remove_defs,
             resolve_allOf=self._resolve_allOf,
             remove_null_anyof=self._remove_null_anyof,
+            resolve_refs=self._resolve_refs,
         )
         if self._optimizer is not None:
             schema = self._optimizer(schema)
@@ -51,6 +55,9 @@ class SchemaSource:
             # If multi_instance_field is set, we assume the schema describes a single instance
             # and we wrap it in an array under the multi_instance_field key.
             schema = {
+                '$schema': schema.pop(
+                    '$schema', 'https://json-schema.org/draft/2020-12/schema'
+                ),
                 'title': f'{schema.get("title", "ExtractedData")}Instances',
                 'description': schema.get(
                     'description', 'Extracted data from the document.'
@@ -63,6 +70,11 @@ class SchemaSource:
                     }
                 },
             }
+            for key in ['required', '$defs']:
+                if key in schema['properties'][self._multi_instance_field]['items']:
+                    schema[key] = schema['properties'][self._multi_instance_field][
+                        'items'
+                    ].pop(key)
         return schema
 
 
@@ -71,6 +83,7 @@ class InlineSchemaSource(SchemaSource):
         self,
         schema: dict[str, Any],
         optimizer: SchemaOptimizer | None = None,
+        resolve_refs: bool = False,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
@@ -83,6 +96,7 @@ class InlineSchemaSource(SchemaSource):
             resolve_allOf=resolve_allOf,
             remove_null_anyof=remove_null_anyof,
             exclude=exclude,
+            resolve_refs=resolve_refs,
             multi_instance_field=multi_instance_field,
         )
         self._schema = schema
@@ -94,6 +108,7 @@ class NomadSchemaSource(SchemaSource):
         m_def: str,
         unit_value: bool = False,
         optimizer: SchemaOptimizer | None = None,
+        resolve_refs: bool = False,
         remove_defs: bool = False,
         resolve_allOf: bool = False,
         remove_null_anyof: bool = False,
@@ -106,10 +121,11 @@ class NomadSchemaSource(SchemaSource):
             resolve_allOf=resolve_allOf,
             remove_null_anyof=remove_null_anyof,
             exclude=exclude,
+            resolve_refs=resolve_refs,
             multi_instance_field=multi_instance_field,
         )
         self._unit_value = unit_value
-        self._schema = get_nomad_schema(m_def, unit_value=unit_value)
+        self._schema = get_nomad_schema_api(m_def, unit_value=unit_value)
         self._m_def = self._schema.get(
             '$id', m_def
         )  # Use $id if available, else fallback to m_def

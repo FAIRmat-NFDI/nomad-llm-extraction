@@ -82,6 +82,31 @@ def _get_entry_data_section_names() -> list[str, ...]:
     return sorted(valid_mdefs)
 
 
+@cache
+def _get_section_names() -> list[str, ...]:
+    """Return qualified names of EntryData sections from all loaded plugins."""
+    from nomad.datamodel import EntryData, all_metainfo_packages
+    from nomad.metainfo import Section
+
+    environment = all_metainfo_packages()
+    if environment is None:
+        return ()
+
+    entry_data_sections = {
+        section
+        for package in environment.packages
+        for section in package.section_definitions
+        if isinstance(section, Section) and section is not EntryData.m_def
+    }
+    print(f'Found {len(entry_data_sections)} EntryData sections in loaded plugins.')
+    valid_mdefs = []
+    for section in entry_data_sections:
+        try:
+            section.m_to_json_schema()
+            valid_mdefs.append(section.qualified_name())
+        except Exception:
+            continue
+    return sorted(valid_mdefs)
 # ENTRY_DATA_SECTION_NAMES = _get_entry_data_section_names()
 
 # MDEF_LIST = sorted(get_all_validmdefs())

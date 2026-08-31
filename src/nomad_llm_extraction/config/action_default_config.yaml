@@ -21,7 +21,11 @@ schema_config:
   remove_defs: False
   resolve_allOf: False
   remove_null_anyof: False
-  exclude: {}
+  resolve_refs: False
+  exclude:
+    '$id': []
+    'path': []
+    'key': ['links','aliases']
   multi_instance_field: &multi_instance_field Null
 
 extraction_metadata:
