@@ -132,7 +132,7 @@ def get_temporal_activities(stages) -> list[tuple[str, Callable[..., Any]]]:
     return temporal_activities
 
 
-def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
+def get_nomad_schema_api(m_def, unit_value=False, exclude_fields=None):
     from nomad_llm_extraction.config import NOMAD_URL
 
     schema_url = NOMAD_URL + f'schemas/{m_def}?format=jsonschema'
@@ -146,3 +146,23 @@ def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
         raise ValueError(
             f'{response.status_code} Error fetching schema for {m_def}: {response.text}'
         )
+
+
+def get_nomad_schema(m_def, unit_value=False, exclude_fields=None):
+    """
+    Fetches the schema for a given m_def from the NOMAD API.
+    If unit_value is True, the schema will be adjusted to use unit values.
+    If exclude_fields is provided, those fields will be removed from the schema.
+    """
+    try:
+        from nomad.metainfo.util import MDefNotFound, MDefWithoutMetainfo
+        from nomad.schemas import get_schema
+
+        resolved_mdef = get_schema(m_def)
+        schema = resolved_mdef.m_to_json_schema(add_unit_value=unit_value)
+    except (ImportError, MDefNotFound, MDefWithoutMetainfo) as e:
+        logger.warning(
+            f"Could not resolve {m_def} using 'nomad.schemas'. Falling back to API call. Error: {e}"
+        )
+        schema = get_nomad_schema_api(m_def, unit_value=unit_value)
+    return schema

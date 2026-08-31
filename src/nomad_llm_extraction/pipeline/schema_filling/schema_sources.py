@@ -63,6 +63,11 @@ class SchemaSource:
                     }
                 },
             }
+            for key in ['required', '$defs']:
+                if key in schema['properties'][self._multi_instance_field]['items']:
+                    schema[key] = schema['properties'][self._multi_instance_field][
+                        'items'
+                    ].pop(key)
         return schema
 
 
