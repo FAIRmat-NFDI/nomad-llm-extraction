@@ -29,6 +29,13 @@ def mock_workflow_logger(monkeypatch):
             warning=lambda *args, **kwargs: None, error=lambda *args, **kwargs: None
         ),
     )
+    # workflow.info() only works inside a real workflow context; the child
+    # workflow ids are prefixed with the parent's id
+    monkeypatch.setattr(
+        workflows.workflow,
+        'info',
+        lambda: SimpleNamespace(workflow_id='wf-test'),
+    )
 
 
 @pytest.fixture
@@ -158,7 +165,7 @@ async def test_extraction_workflow_builds_pdf_prompt_and_retries(
         workflows.parse_text_from_pdf,
         workflows.build_prompt,
     ]
-    assert child_inputs[0][2]['id'] == 'llm_call_attempt_0'
+    assert child_inputs[0][2]['id'] == 'wf-test_llm_call_attempt_0'
     assert child_inputs[1][1].prompt.startswith('built prompt')
     assert 'schema mismatch' in child_inputs[1][1].prompt
 

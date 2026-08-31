@@ -150,7 +150,11 @@ class ExtractionWorkflow:
                         optional_params=inp.llm_engine_optional_params,
                         llm_extraction_method=inp.llm_extraction_method,
                     ),
-                    id=f'llm_call_attempt_{retry_count}',
+                    # Child workflow ids must be unique among RUNNING workflows
+                    # in the namespace; prefix with the parent's id so two
+                    # concurrent extractions cannot collide on
+                    # 'llm_call_attempt_0' ("Workflow execution already started").
+                    id=f'{workflow.info().workflow_id}_llm_call_attempt_{retry_count}',
                     retry_policy=DEFAULT_RETRY_POLICY,
                 )
                 if llm_call_output.err_message is None:
