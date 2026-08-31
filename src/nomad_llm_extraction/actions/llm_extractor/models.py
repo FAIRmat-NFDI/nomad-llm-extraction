@@ -233,3 +233,14 @@ class CleanupInput(ActionId):
         ..., description='Unique identifier for the user who initiated the action.'
     )
     pdfs: list[str] = Field(..., description='Paths to the PDF files to be removed.')
+
+
+class PostProcessingInput(ActionId):
+    """Data for post-processing activity."""
+
+    data: dict[str, Any] = Field(
+        ..., description='extracted data to be post-processed.'
+    )
+    postprocessing_schema: dict[str, Any] = Field(
+        ..., description='The schema to be used for post-processing.'
+    )

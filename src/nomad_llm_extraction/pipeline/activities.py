@@ -54,6 +54,7 @@ def get_inline_schema(inp: InlineSchemaConfig) -> dict[str, Any]:
         remove_null_anyof=inp.remove_null_anyof,
         exclude=inp.exclude,
         multi_instance_field=inp.multi_instance_field,
+        optimizer=inp.optimizer,
     )
     return schema_source.get_schema()
 
@@ -69,6 +70,7 @@ def get_nomad_schema(inp: NomadSchemaConfig) -> dict[str, Any]:
         remove_null_anyof=inp.remove_null_anyof,
         exclude=inp.exclude,
         multi_instance_field=inp.multi_instance_field,
+        optimizer=inp.optimizer,
     )
     return schema_source.get_schema()
 

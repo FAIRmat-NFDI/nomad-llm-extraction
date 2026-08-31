@@ -14,6 +14,7 @@ with workflow.unsafe.imports_passed_through():
     from temporalio.contrib.workflow_streams import WorkflowStream
 
     from nomad_llm_extraction.actions.llm_extractor.activities import (
+        default_postprocessing,
         dump_extractions,
         get_uploaded_assets,
         get_uploaded_pdfs,
@@ -27,6 +28,7 @@ with workflow.unsafe.imports_passed_through():
         CleanupInput,
         ExtractionActionInput,
         ExtractionWorkflowInput,
+        PostProcessingInput,
         ProcessNewFilesInput,
     )
     from nomad_llm_extraction.actions.llm_extractor.utils import (
@@ -513,11 +515,24 @@ class ExtractTextWorkflow:
         workflow.logger.info(
             f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}'
         )
+        postprocessing_result = default_postprocessing(
+            PostProcessingInput(
+                data=extraction_result.extracted_data,
+                postprocessing_schema=extraction_workflow_input.extraction_schema,
+            )
+        )
+        if postprocessing_result.get('error', False):
+            error_msg = f'Post-processing failed with error: {postprocessing_result["error"]}. Will use unprocessed extraction results for NOMAD upload.'
+            workflow.logger.error(error_msg)
+            errors.append(error_msg)
 
+        data = postprocessing_result.get(
+            'postprocessed_data', extraction_result.extracted_data
+        )
         extraction_metadata = data.extraction_metadata
         processed_extractions = process_to_nomad(
             m_def=extraction_workflow_input.schema_config.m_def,
-            data=extraction_result.extracted_data,
+            data=data,
             doi=extraction_metadata.get('doi'),
             multi_instance_field=extraction_workflow_input.schema_config.multi_instance_field,
             extraction_metadata=extraction_metadata,

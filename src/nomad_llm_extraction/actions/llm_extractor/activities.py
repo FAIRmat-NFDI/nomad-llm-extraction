@@ -8,6 +8,7 @@ from temporalio import activity
 from nomad_llm_extraction.actions.llm_extractor.models import (
     ActionFileHandlerInput,
     CleanupInput,
+    PostProcessingInput,
     ProcessNewFilesInput,
 )
 
@@ -193,6 +194,28 @@ def get_text_from_pdf_upload(
     if not text:
         logger.warning(f'Failed to extract text from PDF: {input_data.name}')
     return text, doi
+
+
+@activity.defn(name=f'{ACTION_NAME}.default_postprocessing')
+def default_postprocessing(input_data: PostProcessingInput) -> dict:
+    """
+    Apply the default post-processing pipeline to the extracted data.
+    """
+    from nomad_llm_extraction.config import ACTION_POST_PROCESSING_PIPELINE
+
+    logger = get_logger(__name__).bind(
+        workflow=activity.info().workflow_type, activity=activity.info().activity_type
+    )
+    try:
+        return {
+            'postprocessed_data': ACTION_POST_PROCESSING_PIPELINE.apply(
+                input_data.data,
+                input_data.postprocessing_schema,
+            )
+        }
+    except Exception as e:
+        logger.error(f'Error occurred during post-processing: {e}')
+        return {'error': str(e)}
 
 
 @activity.defn(name=f'{ACTION_NAME}.dump_extractions')

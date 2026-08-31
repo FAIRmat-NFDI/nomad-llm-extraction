@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_serializer
 
 
 class SchemaConfig(BaseModel):
+    optimizer: Callable[[dict[str, Any]], dict[str, Any]] | None = Field(
+        default=None,
+        description='Function to optimize the schema before use in extraction.',
+    )
     remove_defs: bool = Field(
         False, description='Whether to remove the #defs field from the schema.'
     )
