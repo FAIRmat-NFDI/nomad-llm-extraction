@@ -113,7 +113,6 @@ if DEFAULT_EXTRACTION_ACTION_CONFIG.get('extract_multiple_instances'):
 ACTION_SCHEMA_OPTIMIZER = lambda schema: edit_unit_value_in_schema(
     trim_ids_refs(schema)
 )
-DEFAULT_EXTRACTION_ACTION_CONFIG['schema_config']['optimizer'] = ACTION_SCHEMA_OPTIMIZER
 ACTION_POST_PROCESSING_PIPELINE = ProcessingPipeline(
     {
         'unit_conversion': [convert_unit, unit_cond, unit_args],
