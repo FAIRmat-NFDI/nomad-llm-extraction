@@ -96,8 +96,10 @@ async def test_llm_call_workflow_raises_json_parser_error(monkeypatch, llm_input
 
     monkeypatch.setattr(workflows.workflow, 'execute_activity', execute_activity)
 
-    with pytest.raises(Exception, match='invalid JSON'):
-        await workflows.LLMCallWorkflow().run(llm_input)
+    result = await workflows.LLMCallWorkflow().run(llm_input)
+
+    assert result.extracted_data == {'error': 'invalid JSON'}
+    assert result.err_message == 'invalid JSON'
 
 
 @pytest.mark.asyncio
