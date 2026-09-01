@@ -100,6 +100,8 @@ def _get_section_names() -> list[str, ...]:
     }
     valid_mdefs = []
     for section in entry_sections:
+        if 'pynxtools' in section.qualified_name():
+            continue
         try:
             section.m_to_json_schema()
             valid_mdefs.append(section.qualified_name())
