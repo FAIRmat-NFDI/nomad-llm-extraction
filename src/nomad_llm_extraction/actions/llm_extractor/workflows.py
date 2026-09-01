@@ -5,7 +5,7 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from copy import deepcopy
+    import traceback
     from dataclasses import dataclass
 
     from nomad.actions.models import ActionStreamEventSeverity, ActionStreamEventType
@@ -22,6 +22,11 @@ with workflow.unsafe.imports_passed_through():
         process_new_files,
         remove_source_pdfs,
         save_extraction_output,
+    )
+    from nomad_llm_extraction.actions.llm_extractor.error_handling import (
+        failed_result,
+        normalize_errors,
+        successful_result,
     )
     from nomad_llm_extraction.actions.llm_extractor.models import (
         ActionFileHandlerInput,
@@ -129,8 +134,7 @@ class ExtractionActionWorkflow:
                 id=f'extraction-router-workflow::{action_instance_id}',
             )
             if extraction_result['success'] is False:
-                error_msg = f'Extraction workflow failed with errors: {extraction_result["errors"]}'
-                result = {'success': False, 'errors': error_msg}
+                result = failed_result(extraction_result.get('errors'))
             else:
                 self.events.publish(
                     ActionStreamEvent(
@@ -170,18 +174,18 @@ class ExtractionActionWorkflow:
                     start_to_close_timeout=timedelta(seconds=60),
                 )
                 if save_result['success'] is False:
-                    error_msg = f'Failed to save extraction output with errors: {save_result["errors"]}'
-                    result = {'success': False, 'errors': error_msg}
-                result = {
-                    'success': True,
-                    'extraction_entries': extraction_result['refs'],
-                }
+                    result = failed_result(save_result.get('errors'))
+                else:
+                    result = successful_result(
+                        extraction_entries=extraction_result.get('refs', [])
+                    )
             if not result['success'] and result.get('errors'):
+                errors = normalize_errors(result['errors'])
                 self.events.publish(
                     ActionStreamEvent(
                         type=ActionStreamEventType.STATE,
                         name='extraction_failed',
-                        message=f'Extraction workflow failed with errors: {result["errors"]}',
+                        message=f'Extraction workflow failed with errors: {errors}',
                         severity=ActionStreamEventSeverity.ERROR,
                         timestamp=workflow.now(),
                         terminal=True,
@@ -189,10 +193,10 @@ class ExtractionActionWorkflow:
                 )
                 await workflow.execute_activity(
                     log_message,
-                    str(result['errors']),
+                    '\n'.join(errors),
                     start_to_close_timeout=timedelta(seconds=60),
                 )
-                return result
+                return failed_result(errors)
             workflow.logger.info(
                 f'LLM Extraction action workflow completed with result: {result}'
             )
@@ -208,17 +212,18 @@ class ExtractionActionWorkflow:
             )
             return result
         except Exception as e:
-            error_msg = f'Extraction workflow failed with exception: {str(e)}'
+            error_msg = f'Unexpected exception in ExtractionActionWorkflow: {str(e)}'
+            full_traceback = traceback.format_exc()
             await workflow.execute_activity(
                 log_message,
-                error_msg,
+                f'{error_msg}\n{full_traceback}',
                 start_to_close_timeout=timedelta(seconds=60),
             )
-            workflow.logger.error(error_msg)
+            workflow.logger.exception(error_msg)
             raise ApplicationError(
                 error_msg,
                 non_retryable=True,
-            )
+            ) from e
 
 
 @workflow.defn
@@ -237,40 +242,40 @@ class ExtractionRouterWorkflow:
         of them, and finally processes the extracted data to create new entries in NOMAD.
         """
         parent_workflow_id = workflow.info().workflow_id
-        if not data.text and not data.prompt:
-            self.events.publish(
-                ActionStreamEvent(
-                    type=ActionStreamEventType.MESSAGE,
-                    name='finding_pdfs',
-                    message='Finding PDF files in the upload.',
-                    severity=ActionStreamEventSeverity.INFO,
-                    timestamp=workflow.now(),
+        try:
+            if not data.text and not data.prompt:
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.MESSAGE,
+                        name='finding_pdfs',
+                        message='Finding PDF files in the upload.',
+                        severity=ActionStreamEventSeverity.INFO,
+                        timestamp=workflow.now(),
+                    )
                 )
-            )
-            result = await workflow.execute_child_workflow(
-                ExtractPDFWorkflow.run,
-                data,
-                id=f'extract-pdf-workflow::{parent_workflow_id}',
-            )
-        else:
-            self.events.publish(
-                ActionStreamEvent(
-                    type=ActionStreamEventType.MESSAGE,
-                    name='extracting_text',
-                    message='Extracting from provided text.',
-                    severity=ActionStreamEventSeverity.INFO,
-                    timestamp=workflow.now(),
+                result = await workflow.execute_child_workflow(
+                    ExtractPDFWorkflow.run,
+                    data,
+                    id=f'extract-pdf-workflow::{parent_workflow_id}',
                 )
-            )
-            result = await workflow.execute_child_workflow(
-                ExtractTextWorkflow.run,
-                data,
-                id=f'extract-text-workflow::{parent_workflow_id}',
-            )
-        if result['success'] is False:
-            if result['result'] == {}:
-                return {'refs': [], 'success': False, 'errors': result['errors']}
             else:
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.MESSAGE,
+                        name='extracting_text',
+                        message='Extracting from provided text.',
+                        severity=ActionStreamEventSeverity.INFO,
+                        timestamp=workflow.now(),
+                    )
+                )
+                result = await workflow.execute_child_workflow(
+                    ExtractTextWorkflow.run,
+                    data,
+                    id=f'extract-text-workflow::{parent_workflow_id}',
+                )
+            if result['success'] is False:
+                if result.get('result', {}) == {}:
+                    return failed_result(result.get('errors'), refs=[])
                 self.events.publish(
                     ActionStreamEvent(
                         type=ActionStreamEventType.MESSAGE,
@@ -281,17 +286,27 @@ class ExtractionRouterWorkflow:
                     )
                 )
 
-        processing_input = ProcessNewFilesInput(
-            upload_id=data.upload_id,
-            user_id=data.user_id,
-            results=result['result'],
-        )
-        proccesing_result = await workflow.execute_child_workflow(
-            ProcessExtractionsWorkflow.run,
-            processing_input,
-            id=f'process-extractions-workflow::{parent_workflow_id}',
-        )
-        return proccesing_result
+            processing_input = ProcessNewFilesInput(
+                upload_id=data.upload_id,
+                user_id=data.user_id,
+                results=result['result'],
+            )
+            proccesing_result = await workflow.execute_child_workflow(
+                ProcessExtractionsWorkflow.run,
+                processing_input,
+                id=f'process-extractions-workflow::{parent_workflow_id}',
+            )
+            if not proccesing_result.get('success'):
+                return failed_result(proccesing_result.get('errors'), refs=[])
+            return proccesing_result
+        except Exception as e:
+            workflow.logger.exception(
+                f'Unexpected exception in ExtractionRouterWorkflow: {e}'
+            )
+            raise ApplicationError(
+                f'Unexpected exception in ExtractionRouterWorkflow: {e}',
+                non_retryable=True,
+            ) from e
 
 
 @workflow.defn
@@ -309,6 +324,7 @@ class ProcessExtractionsWorkflow:
         errors = []
 
         result_paths = []
+        result_entry_refs = []
         try:
             for name, extraction in data.results.items():
                 workflow.logger.info(f'Processing extraction for {name}: {extraction}')
@@ -340,15 +356,25 @@ class ProcessExtractionsWorkflow:
             )
             result_entry_refs = processing_result['refs']
             if not processing_result['success']:
-                errors.extend(processing_result['errors'])
+                errors.extend(normalize_errors(processing_result.get('errors')))
         except ActivityError as e:
             error_msg = f'Extraction activity failed: {e}'
             if len(error_msg) > 10000:
                 error_msg = error_msg[:10000] + '... [truncated]'
             errors.append(error_msg)
-            return {'refs': [], 'success': False, 'errors': errors}
+            return failed_result(errors, refs=[])
+        except Exception as e:
+            workflow.logger.exception(
+                f'Unexpected exception in ProcessExtractionsWorkflow: {e}'
+            )
+            raise ApplicationError(
+                f'Unexpected exception in ProcessExtractionsWorkflow: {e}',
+                non_retryable=True,
+            ) from e
 
-        return {'refs': result_entry_refs, 'success': errors == [], 'errors': errors}
+        if errors:
+            return failed_result(errors, refs=result_entry_refs)
+        return successful_result(refs=result_entry_refs)
 
 
 @workflow.defn
@@ -363,7 +389,8 @@ class ExtractPDFWorkflow:
         parent_workflow_id = workflow.info().workflow_id
         errors = []
         extractions = {}
-
+        list_of_pdfs = {'pdfs': [], 'texts': []}
+        pdf_errors = []
         action_metadata = ActionFileHandlerInput(
             upload_id=data.upload_id,
             user_id=data.user_id,
@@ -371,48 +398,47 @@ class ExtractPDFWorkflow:
             action_file_refs=data.pdfs,
         )
         use_asset_refs = data.pdfs is not None and len(data.pdfs) > 0
-        if use_asset_refs:
-            self.events.publish(
-                ActionStreamEvent(
-                    type=ActionStreamEventType.MESSAGE,
-                    name='using_provided_pdfs',
-                    message=f'Using provided list of {len(data.pdfs)} PDF files for extraction.',
-                    severity=ActionStreamEventSeverity.INFO,
-                    timestamp=workflow.now(),
-                )
-            )
-            list_of_pdfs = await workflow.execute_activity(
-                get_uploaded_assets,
-                action_metadata,
-                start_to_close_timeout=timedelta(seconds=180),
-                retry_policy=default_retry_policy,
-            )
-        else:
-            self.events.publish(
-                ActionStreamEvent(
-                    type=ActionStreamEventType.MESSAGE,
-                    name='finding_pdfs',
-                    message='Finding PDF files in the upload.',
-                    severity=ActionStreamEventSeverity.INFO,
-                    timestamp=workflow.now(),
-                )
-            )
-            list_of_pdfs = await workflow.execute_activity(
-                get_uploaded_pdfs,
-                action_metadata,
-                start_to_close_timeout=timedelta(seconds=180),
-                retry_policy=default_retry_policy,
-            )
-        if not list_of_pdfs['pdfs']:
-            error_msg = 'No PDF files found in the upload.'
-            errors.append(error_msg)
-            return {'result': {}, 'success': False, 'errors': errors}
-        if not list_of_pdfs['texts']:
-            error_msg = 'Failed to extract text from any PDF files.'
-            errors.append(error_msg)
-            return {'result': {}, 'success': False, 'errors': errors}
-        pdf_errors = []
         try:
+            if use_asset_refs:
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.MESSAGE,
+                        name='using_provided_pdfs',
+                        message=f'Using provided list of {len(data.pdfs)} PDF files for extraction.',
+                        severity=ActionStreamEventSeverity.INFO,
+                        timestamp=workflow.now(),
+                    )
+                )
+                list_of_pdfs = await workflow.execute_activity(
+                    get_uploaded_assets,
+                    action_metadata,
+                    start_to_close_timeout=timedelta(seconds=180),
+                    retry_policy=default_retry_policy,
+                )
+            else:
+                self.events.publish(
+                    ActionStreamEvent(
+                        type=ActionStreamEventType.MESSAGE,
+                        name='finding_pdfs',
+                        message='Finding PDF files in the upload.',
+                        severity=ActionStreamEventSeverity.INFO,
+                        timestamp=workflow.now(),
+                    )
+                )
+                list_of_pdfs = await workflow.execute_activity(
+                    get_uploaded_pdfs,
+                    action_metadata,
+                    start_to_close_timeout=timedelta(seconds=180),
+                    retry_policy=default_retry_policy,
+                )
+            if not list_of_pdfs['pdfs']:
+                error_msg = 'No PDF files found in the upload.'
+                errors.append(error_msg)
+                return failed_result(errors, result={})
+            if not list_of_pdfs['texts']:
+                error_msg = 'Failed to extract text from any PDF files.'
+                errors.append(error_msg)
+                return failed_result(errors, result={})
             for pdf, pdf_text, doi in list_of_pdfs['texts']:
                 if not pdf_text:
                     error_msg = f'Failed to read text from PDF: {pdf}'
@@ -441,8 +467,12 @@ class ExtractPDFWorkflow:
                     id=f'extraction-workflow-{pdf}::{parent_workflow_id}',
                 )
                 if extraction_result['success'] is False:
-                    error_msg = f'LLM extraction workflow failed for PDF {pdf} with errors: {extraction_result["errors"]}'
-                    pdf_errors.append(error_msg)
+                    nested_errors = normalize_errors(extraction_result.get('errors'))
+                    error_msg = (
+                        f'LLM extraction workflow failed for PDF {pdf} with errors: '
+                        f'{nested_errors}'
+                    )
+                    pdf_errors.extend([error_msg])
                     continue
                 else:
                     self.events.publish(
@@ -461,6 +491,14 @@ class ExtractPDFWorkflow:
             if len(error_msg) > 10000:
                 error_msg = error_msg[:10000] + '... [truncated]'
             errors.append(error_msg)
+        except Exception as e:
+            workflow.logger.exception(
+                f'Unexpected exception in ExtractPDFWorkflow: {e}'
+            )
+            raise ApplicationError(
+                f'Unexpected exception in ExtractPDFWorkflow: {e}',
+                non_retryable=True,
+            ) from e
 
         finally:
             if data.delete_source_pdfs and list_of_pdfs['pdfs']:
@@ -481,25 +519,29 @@ class ExtractPDFWorkflow:
                     start_to_close_timeout=timedelta(seconds=60),
                     retry_policy=default_retry_policy,
                 )
-        success = errors == [] and not pdf_errors
-        return {'result': extractions, 'success': success, 'errors': errors}
+        all_errors = errors + pdf_errors
+        if all_errors:
+            return failed_result(all_errors, result=extractions)
+        return successful_result(result=extractions)
 
 
 @workflow.defn
 class ExtractTextWorkflow:
     @workflow.run
     async def run(self, data: ExtractionWorkflowInput) -> dict:
+        parent_workflow_id = workflow.info().workflow_id
+        name = data.name or data.upload_id
+        workflow.logger.info(f'Running LLM extraction workflow for {name}')
+        errors = []
+        retry_policy = RetryPolicy(
+            maximum_attempts=3,
+        )
         try:
-            parent_workflow_id = workflow.info().workflow_id
-            name = data.name or data.action_instance_id
-            workflow.logger.info(f'Running LLM extraction workflow for {name}')
-            errors = []
-
             if not data.text and not data.prompt:
                 error_msg = 'No text or prompt provided.'
                 workflow.logger.error(error_msg)
                 errors.append(error_msg)
-                return {'result': {}, 'success': False, 'errors': errors}
+                return failed_result(errors, result={})
             extraction_workflow_input = PipelineExtractionWorkflowInput(
                 **data.model_dump()
             )
@@ -521,13 +563,13 @@ class ExtractTextWorkflow:
                 ExtractionWorkflow.run,
                 extraction_workflow_input,
                 id=f'extraction-workflow::{parent_workflow_id}',
-                retry_policy=default_retry_policy,
+                retry_policy=retry_policy,
             )
             if extraction_result.err_message:
                 error_msg = extraction_result.err_message
                 workflow.logger.error(error_msg)
                 errors.append(error_msg)
-                return {'result': {}, 'success': False, 'errors': errors}
+                return failed_result(errors, result={})
             workflow.logger.info(
                 f'LLM Extraction workflow completed successfully: {extraction_result.extracted_data}'
             )
@@ -559,13 +601,12 @@ class ExtractTextWorkflow:
             workflow.logger.info(
                 f'Processed extractions ready for NOMAD upload: {processed_extractions}'
             )
-            return {
-                'result': {name: processed_extractions},
-                'success': errors == [],
-                'errors': errors,
-            }
+            return successful_result(result={name: processed_extractions})
         except Exception as e:
-            workflow.logger.error(
-                f'Extraction workflow failed with application error: {str(e)}'
+            workflow.logger.exception(
+                f'Unexpected exception in ExtractTextWorkflow: {e}'
             )
-            return {'result': {}, 'success': False, 'errors': [str(e)]}
+            raise ApplicationError(
+                f'Unexpected exception in ExtractTextWorkflow: {e}',
+                non_retryable=True,
+            ) from e
