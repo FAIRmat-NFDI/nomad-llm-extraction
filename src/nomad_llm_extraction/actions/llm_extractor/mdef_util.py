@@ -113,5 +113,5 @@ def _get_section_names() -> list[str, ...]:
 
 # MDEF_LIST = sorted(get_all_validmdefs())
 # MDEF_LIST = _get_entry_data_section_names()
-MDEF_LIST = _get_section_names()
+# MDEF_LIST = _get_section_names()
 # MDEF_LIST = [f'{mdef.split(".")[-1]} ({mdef})' for mdef in MDEF_LIST]

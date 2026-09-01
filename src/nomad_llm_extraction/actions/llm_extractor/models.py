@@ -3,8 +3,6 @@ from typing import Literal
 from nomad.actions.assets.models import ActionAssetRef
 from pydantic import BaseModel, Field, SecretStr, field_serializer
 
-from nomad_llm_extraction.actions.llm_extractor.mdef_util import MDEF_LIST
-
 DEFAULT_MODEL_NAME = 'Claude Sonnet 4.6'
 ModelName = Literal[
     'Claude Sonnet 5',
@@ -128,7 +126,7 @@ class ExtractionActionInput(BaseModel):
     extraction_m_def: str = Field(
         ...,
         description='Nomad Section m_def to be used for extraction.',
-        examples=MDEF_LIST,
+        # examples=MDEF_LIST,
     )
     model: str = Field(
         title=f'LLM Model [{DEFAULT_MODEL_NAME} (Default)]',
@@ -205,6 +203,21 @@ class ExtractionActionInput(BaseModel):
             return model_name
         prefix = '' if self.api_base_url is None else 'openai/'  # for litellm
         return f'{prefix}{model_name}'
+
+    @classmethod
+    def get_schema_for_entry_point(cls, entry_point_config: Any):
+        from nomad_llm_extraction.actions.llm_extractor.mdef_util import (
+            _get_section_names,
+        )
+
+        class DynamicExtractionActionInput(cls):  # type: ignore
+            extraction_m_def: str = Field(
+                ...,
+                description='Nomad Section m_def to be used for extraction.',
+                examples=_get_section_names(),
+            )
+
+        return DynamicExtractionActionInput
 
 
 class ProcessNewFilesInput(ActionId):

@@ -45,7 +45,7 @@ class LLMCallWorkflow:
 
         if not raw_output:
             error_msg = 'LLM did not return any output.'
-            raise Exception(error_msg)
+            raise ApplicationError(error_msg)
 
         error, extracted_data = await workflow.execute_activity(
             json_parse,
@@ -58,7 +58,11 @@ class LLMCallWorkflow:
             error_msg = extracted_data.get(
                 'error', 'LoadingError: Failed to parse JSON output from LLM.'
             )
-            raise Exception(error_msg)
+            return LLMCallOutput(
+                extracted_data=extracted_data,
+                raw_output=raw_output,
+                err_message=error_msg,
+            )
 
         # Step 4: Validate extraction against schema
         validation_result = await workflow.execute_activity(

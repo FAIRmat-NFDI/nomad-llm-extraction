@@ -38,6 +38,18 @@ Workflows use Temporal activities with explicit timeouts and generally a three-a
 retry policy. Keep NOMAD API calls, file access, and blocking work inside activities;
 workflows should orchestrate typed inputs and results only.
 
+Action workflow and activity result contracts should stay consistent: expected
+operational failures are returned as dictionaries with
+`success: false` and `errors: list[str]` so downstream workflows and the NOMAD GUI
+can propagate those messages directly. Do not collapse nested error lists into a
+single formatted string.
+
+For unexpected workflow exceptions, log a full traceback and raise a
+non-retryable `ApplicationError` so the workflow fails explicitly instead of
+returning success-shaped fallbacks. Retryable infrastructure failures (for
+example transient activity-level API or storage issues) should keep propagating
+through Temporal activity boundaries so `RetryPolicy` can retry them.
+
 The root, router, PDF, and processing workflows publish NOMAD `ActionStreamEvent`
 objects on `ACTION_STREAM_TOPIC`. Preserve a terminal state event for both completion
 and failure. Use non-terminal message events for progress, warnings for partial PDF
