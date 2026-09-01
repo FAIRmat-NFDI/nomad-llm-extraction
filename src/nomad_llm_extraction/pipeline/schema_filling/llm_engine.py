@@ -173,7 +173,21 @@ class LiteLLMEngine(StructuredLLMEngine):
                 drop_params=True,
                 **params_to_use,
             )
-            message_content = resp.choices[0].message.tool_calls[0].function.arguments
+            tool_calls = resp.choices[0].message.tool_calls
+            if not tool_calls:
+                logger.error(
+                    f'No tool calls found in response: {resp} falling back to resp.choices[0].message.content'
+                )
+                return resp.choices[0].message.content
+            else:
+                message_content = tool_calls[0]
+                for attr in ['function', 'arguments']:
+                    if not hasattr(message_content, attr):
+                        logger.error(
+                            f'Missing attribute {attr} in tool call: {message_content}. Falling back to resp.choices[0].message.content'
+                        )
+                        return resp.choices[0].message.content
+                    message_content = getattr(message_content, attr)
         except (AttributeError, IndexError, TypeError, ValueError) as e:
             logger.error(
                 f'LiteLLM generation with tool call failed due to unexpected response structure: {e} returned response: {resp}'

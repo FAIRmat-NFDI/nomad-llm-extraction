@@ -92,23 +92,26 @@ def _get_section_names() -> list[str, ...]:
     if environment is None:
         return ()
 
-    entry_data_sections = {
+    entry_sections = {
         section
         for package in environment.packages
         for section in package.section_definitions
         if isinstance(section, Section) and section is not EntryData.m_def
     }
-    print(f'Found {len(entry_data_sections)} EntryData sections in loaded plugins.')
     valid_mdefs = []
-    for section in entry_data_sections:
+    for section in entry_sections:
         try:
             section.m_to_json_schema()
             valid_mdefs.append(section.qualified_name())
         except Exception:
             continue
+    print(f'Found {len(valid_mdefs)} valid sections in loaded plugins.')
     return sorted(valid_mdefs)
+
+
 # ENTRY_DATA_SECTION_NAMES = _get_entry_data_section_names()
 
 # MDEF_LIST = sorted(get_all_validmdefs())
-MDEF_LIST = _get_entry_data_section_names()
-MDEF_LIST = [f'{mdef.split(".")[-1]} ({mdef})' for mdef in MDEF_LIST]
+# MDEF_LIST = _get_entry_data_section_names()
+MDEF_LIST = _get_section_names()
+# MDEF_LIST = [f'{mdef.split(".")[-1]} ({mdef})' for mdef in MDEF_LIST]
