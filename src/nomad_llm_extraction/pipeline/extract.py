@@ -9,6 +9,8 @@ import yaml
 from pydantic import ValidationError
 from temporalio import workflow
 from temporalio.client import Client
+from temporalio.contrib.pydantic import PydanticPayloadConverter
+from temporalio.converter import DataConverter
 from temporalio.envconfig import ClientConfig
 from temporalio.worker import Worker
 
@@ -208,6 +210,10 @@ def write_yaml_config(config: Mapping[str, Any], path: str | Path) -> None:
 async def start_worker():
     temporal_client_config = ClientConfig.load_client_connect_config(
         config_file=TEMPORAL_CONFIG_PATH
+    )
+    temporal_client_config.setdefault(
+        'data_converter',
+        DataConverter(payload_converter_class=PydanticPayloadConverter),
     )
     client = await Client.connect(**temporal_client_config)
     worker = Worker(
