@@ -15,6 +15,7 @@ llm_engine_config:
 
 max_retry_attempts: 3
 
+extract_multiple_instances: true
 m_def: &m_def 'nomad.datamodel.results.Catalyst'  # Update with your M def
 schema_config:
   m_def: *m_def
@@ -33,3 +34,4 @@ nomad_upload_config:
   multi_instance_field: *multi_instance_field
   entry_name: 'catalyst_extraction'
   doi: 'test_doi'  # Update with actual DOI if available
+llm_extraction_method: 'response_format'
