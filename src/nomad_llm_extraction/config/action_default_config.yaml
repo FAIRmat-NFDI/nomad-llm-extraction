@@ -15,9 +15,9 @@ llm_engine_config:
 
 max_retry_attempts: 3
 
-extract_multiple_instances: true
+extract_multiple_instances: True
 schema_config:
-  unit_value: False
+  unit_value: True
   remove_defs: False
   resolve_allOf: False
   remove_null_anyof: False
