@@ -14,6 +14,8 @@ from nomad_llm_extraction.actions.llm_extractor.models import (
 
 MAX_ATTEMPT_NUM = 100  # attempts to reprocess upload with new entries
 ACTION_NAME = 'nomad_llm_extraction_action'
+RESULTS_DIR = 'extraction_results'
+TEMP_DIR = 'raw_extractions'
 
 
 @activity.defn(name=f'{ACTION_NAME}.logging')
@@ -65,7 +67,7 @@ def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
     """
     Find all PDF files in the upload if authorized user has access to the upload.
     """
-    from nomad.actions.manager import get_upload_files
+    from nomad.uploads import get_upload_files
 
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
     from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
@@ -137,7 +139,7 @@ def save_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
 
 @activity.defn(name=f'{ACTION_NAME}.get_config')
 def get_config(input_data):
-    from nomad.actions.manager import get_upload_files
+    from nomad.uploads import get_upload_files
 
     from nomad_llm_extraction.utils.utils import load_yaml_config
 
@@ -171,7 +173,7 @@ def get_config(input_data):
 def get_text_from_pdf_upload(
     input_data: ActionFileHandlerInput,
 ) -> tuple[str | None, str | None]:
-    from nomad.actions.manager import get_upload_files
+    from nomad.uploads import get_upload_files
 
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
     from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
@@ -220,30 +222,35 @@ def default_postprocessing(input_data: PostProcessingInput) -> dict:
 
 @activity.defn(name=f'{ACTION_NAME}.dump_extractions')
 async def dump_extractions(input_data: ActionFileHandlerInput):
-    from nomad.actions.manager import get_upload_files
+    from nomad.uploads import get_upload_files
 
     upload_files = get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
-    temp_dir = 'temp_results'
+    temp_dir = TEMP_DIR
     fname = f'{temp_dir}/{input_data.name}'
+    action_instance_id = input_data.action_instance_id.removeprefix(
+        'nomad_llm_extraction.actions:llm_extractor_action_entry_point-'
+    )
     save_paths = []
     extractions = input_data.data or []
     for index, extracted_instance in enumerate(extractions):
         if not upload_files.raw_path_exists(temp_dir):
             upload_files.raw_create_directory(temp_dir)
         with upload_files.raw_file(
-            file_path=fname + f'_{index}.archive.json', mode='w', encoding='utf-8'
+            file_path=fname + f'_{index}_id_{action_instance_id}.archive.json',
+            mode='w',
+            encoding='utf-8',
         ) as f:
             json.dump(extracted_instance, f, indent=4)
-            save_paths.append(fname + f'_{index}.archive.json')
+            save_paths.append(fname + f'_{index}_id_{action_instance_id}.archive.json')
     return save_paths
 
 
 def get_upload(upload_id: str, user_id: str):
-    from nomad.actions.manager import get_upload_files
     from nomad.processing.data import Upload
+    from nomad.uploads import get_upload_files
 
     upload_files = get_upload_files(
         upload_id,
@@ -285,6 +292,8 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         logger.error(error)
         return {'refs': [], 'success': False, 'errors': [error]}
 
+    save_dir = RESULTS_DIR
+    temp_dir = TEMP_DIR
     file_operations = []
     proc_file_paths = []
     for path in data.results['paths']:
@@ -292,15 +301,15 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
             dict(
                 op='ADD',
                 path=upload_files.raw_file_object(path).os_path,
-                target_dir='results',
+                target_dir=save_dir,
                 temporary=False,
             )
         )
-        proc_file_paths.append([path, path.replace('temp_results/', 'results/')])
+        proc_file_paths.append([path, path.replace(f'{temp_dir}/', f'{save_dir}/')])
 
     handle = upload.process_upload(
         file_operations=file_operations,
-        path_filter='results',
+        path_filter=save_dir,
         only_updated_files=True,
     )
 
@@ -319,10 +328,10 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
                 upload_files.delete_rawfiles(temp_file_path)
                 cleaned_paths.append(temp_file_path)
     if (
-        upload_files.raw_path_exists('temp_results')
+        upload_files.raw_path_exists(temp_dir)
         and cleaned_paths == data.results['paths']
     ):
-        upload_files.delete_rawfiles('temp_results')
+        upload_files.delete_rawfiles(temp_dir)
     return {'refs': result_entry_refs, 'success': True, 'errors': []}
 
 
@@ -340,11 +349,16 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
         logger.error(error)
         return {'success': False, 'errors': [error]}
     file_name = (
-        input_data.name or f'extraction_output_{int(time.time())}'
-    ) + '.archive.json'
-    output_path = f'temp/{file_name}'
-    if not upload_files.raw_path_exists('temp'):
-        upload_files.raw_create_directory('temp')
+        input_data.name
+        or f'extraction_output_{int(time.time())}'
+        + input_data.action_instance_id.removeprefix(
+            'nomad_llm_extraction.actions:llm_extractor_action_entry_point-'
+        )
+        + '.archive.json'
+    )
+    output_path = f'{TEMP_DIR}/{file_name}'
+    if not upload_files.raw_path_exists(TEMP_DIR):
+        upload_files.raw_create_directory(TEMP_DIR)
 
     with upload_files.raw_file(file_path=output_path, mode='w', encoding='utf-8') as f:
         json.dump(input_data.data[0], f, indent=4)
@@ -363,8 +377,11 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     )
     await handle.result()  # type: ignore
     if upload_files.raw_path_exists(file_name):
-        upload_files.delete_rawfiles('temp')
-        return {'success': True, 'errors': []}
+        upload_files.delete_rawfiles(TEMP_DIR)
+        entry_ref = (
+            f'../uploads/{upload.upload_id}/archive/{file_name}.archive.json#/data'
+        )
+        return {'success': True, 'errors': [], 'output_entry_ref': entry_ref}
     logger.error(f'Failed to save extraction output to {file_name}')
     return {
         'success': False,
@@ -377,7 +394,7 @@ def remove_source_pdfs(input_data: CleanupInput) -> None:
     """
     Remove source PDF files from the upload after extraction.
     """
-    from nomad.actions.manager import get_upload_files
+    from nomad.uploads import get_upload_files
 
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
