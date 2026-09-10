@@ -14,6 +14,18 @@ from nomad_llm_extraction.actions.llm_extractor.models import (
 
 MAX_ATTEMPT_NUM = 100  # attempts to reprocess upload with new entries
 ACTION_NAME = 'nomad_llm_extraction_action'
+RESULTS_DIR = 'extraction_results'
+TEMP_DIR = 'raw_extractions'
+
+
+def _get_upload_files(upload_id: str, user_id: str):
+    try:
+        from nomad.uploads import get_upload_files
+    except ImportError:
+        # nomad-lab before its actions refactoring, which moved the function
+        from nomad.actions.manager import get_upload_files
+
+    return get_upload_files(upload_id, user_id)
 
 
 def _get_upload_files(upload_id: str, user_id: str):
@@ -228,23 +240,29 @@ async def dump_extractions(input_data: ActionFileHandlerInput):
         input_data.upload_id,
         input_data.user_id,
     )
-    temp_dir = 'temp_results'
+    temp_dir = TEMP_DIR
     fname = f'{temp_dir}/{input_data.name}'
+    action_instance_id = input_data.action_instance_id.removeprefix(
+        'nomad_llm_extraction.actions:llm_extractor_action_entry_point-'
+    )
     save_paths = []
     extractions = input_data.data or []
     for index, extracted_instance in enumerate(extractions):
         if not upload_files.raw_path_exists(temp_dir):
             upload_files.raw_create_directory(temp_dir)
         with upload_files.raw_file(
-            file_path=fname + f'_{index}.archive.json', mode='w', encoding='utf-8'
+            file_path=fname + f'_{index}_id_{action_instance_id}.archive.json',
+            mode='w',
+            encoding='utf-8',
         ) as f:
             json.dump(extracted_instance, f, indent=4)
-            save_paths.append(fname + f'_{index}.archive.json')
+            save_paths.append(fname + f'_{index}_id_{action_instance_id}.archive.json')
     return save_paths
 
 
 def get_upload(upload_id: str, user_id: str):
     from nomad.processing.data import Upload
+    from nomad.uploads import get_upload_files
 
     upload_files = _get_upload_files(
         upload_id,
@@ -286,6 +304,8 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
         logger.error(error)
         return {'refs': [], 'success': False, 'errors': [error]}
 
+    save_dir = RESULTS_DIR
+    temp_dir = TEMP_DIR
     file_operations = []
     proc_file_paths = []
     for path in data.results['paths']:
@@ -293,15 +313,15 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
             dict(
                 op='ADD',
                 path=upload_files.raw_file_object(path).os_path,
-                target_dir='results',
+                target_dir=save_dir,
                 temporary=False,
             )
         )
-        proc_file_paths.append([path, path.replace('temp_results/', 'results/')])
+        proc_file_paths.append([path, path.replace(f'{temp_dir}/', f'{save_dir}/')])
 
     handle = upload.process_upload(
         file_operations=file_operations,
-        path_filter='results',
+        path_filter=save_dir,
         only_updated_files=True,
     )
 
@@ -320,10 +340,10 @@ async def process_new_files(data: ProcessNewFilesInput) -> dict:
                 upload_files.delete_rawfiles(temp_file_path)
                 cleaned_paths.append(temp_file_path)
     if (
-        upload_files.raw_path_exists('temp_results')
+        upload_files.raw_path_exists(temp_dir)
         and cleaned_paths == data.results['paths']
     ):
-        upload_files.delete_rawfiles('temp_results')
+        upload_files.delete_rawfiles(temp_dir)
     return {'refs': result_entry_refs, 'success': True, 'errors': []}
 
 
@@ -341,11 +361,16 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
         logger.error(error)
         return {'success': False, 'errors': [error]}
     file_name = (
-        input_data.name or f'extraction_output_{int(time.time())}'
-    ) + '.archive.json'
-    output_path = f'temp/{file_name}'
-    if not upload_files.raw_path_exists('temp'):
-        upload_files.raw_create_directory('temp')
+        input_data.name
+        or f'extraction_output_{int(time.time())}'
+        + input_data.action_instance_id.removeprefix(
+            'nomad_llm_extraction.actions:llm_extractor_action_entry_point-'
+        )
+        + '.archive.json'
+    )
+    output_path = f'{TEMP_DIR}/{file_name}'
+    if not upload_files.raw_path_exists(TEMP_DIR):
+        upload_files.raw_create_directory(TEMP_DIR)
 
     with upload_files.raw_file(file_path=output_path, mode='w', encoding='utf-8') as f:
         json.dump(input_data.data[0], f, indent=4)
@@ -364,8 +389,11 @@ async def save_extraction_output(input_data: ActionFileHandlerInput) -> dict:
     )
     await handle.result()  # type: ignore
     if upload_files.raw_path_exists(file_name):
-        upload_files.delete_rawfiles('temp')
-        return {'success': True, 'errors': []}
+        upload_files.delete_rawfiles(TEMP_DIR)
+        entry_ref = (
+            f'../uploads/{upload.upload_id}/archive/{file_name}.archive.json#/data'
+        )
+        return {'success': True, 'errors': [], 'output_entry_ref': entry_ref}
     logger.error(f'Failed to save extraction output to {file_name}')
     return {
         'success': False,

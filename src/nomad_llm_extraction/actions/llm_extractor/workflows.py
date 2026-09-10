@@ -104,6 +104,12 @@ class ExtractionActionWorkflow:
         source PDF files.
         """
         action_instance_id = workflow.info().workflow_id
+        base_info = {
+            'action_instance_id': action_instance_id,
+            'upload_id': data.upload_id,
+            'user_id': data.user_id,
+        }
+        payload = {}
         try:
             self.events.publish(
                 ActionStreamEvent(
@@ -120,22 +126,21 @@ class ExtractionActionWorkflow:
 
             extraction_config = create_extraction_config(data)
             extraction_workflow_input = ExtractionWorkflowInput(
-                upload_id=data.upload_id,
-                user_id=data.user_id,
                 text=data.text,
                 delete_source_pdfs=data.delete_source_pdfs,
                 pdfs=data.pdfs,
-                action_instance_id=action_instance_id,
+                **base_info,
                 **extraction_config,
             )
             extraction_result = await workflow.execute_child_workflow(
                 ExtractionRouterWorkflow.run,
                 extraction_workflow_input,
-                id=f'extraction-router-workflow::{action_instance_id}',
+                id=f'extraction-router-workflow::{action_instance_id.split(":")[1]}',
             )
             if extraction_result['success'] is False:
                 result = failed_result(extraction_result.get('errors'))
             else:
+                payload = {'extraction_entries': extraction_result.get('refs', [])}
                 self.events.publish(
                     ActionStreamEvent(
                         type=ActionStreamEventType.MESSAGE,
@@ -166,21 +171,21 @@ class ExtractionActionWorkflow:
                 save_result = await workflow.execute_activity(
                     save_extraction_output,
                     ActionFileHandlerInput(
-                        upload_id=data.upload_id,
-                        user_id=data.user_id,
-                        name=f'{action_instance_id.replace(".actions:llm_extractor_action_entry_point", "")}',
+                        name=f'llm_extraction_output_{workflow.info().start_time.isoformat()}',
                         data=[extraction_output_archive],
+                        **base_info,
                     ),
                     start_to_close_timeout=timedelta(seconds=60),
                 )
                 if save_result['success'] is False:
                     result = failed_result(save_result.get('errors'))
                 else:
-                    result = successful_result(
-                        extraction_entries=extraction_result.get('refs', [])
+                    payload['extraction_output_archive'] = save_result.get(
+                        'output_entry_ref', None
                     )
+                    result = successful_result(**payload)
             if not result['success'] and result.get('errors'):
-                errors = normalize_errors(result['errors'])
+                errors = normalize_errors(result.pop('errors'))
                 self.events.publish(
                     ActionStreamEvent(
                         type=ActionStreamEventType.STATE,
@@ -196,7 +201,7 @@ class ExtractionActionWorkflow:
                     '\n'.join(errors),
                     start_to_close_timeout=timedelta(seconds=60),
                 )
-                return failed_result(errors)
+                return failed_result(errors, **payload)
             workflow.logger.info(
                 f'LLM Extraction action workflow completed with result: {result}'
             )
@@ -242,6 +247,11 @@ class ExtractionRouterWorkflow:
         of them, and finally processes the extracted data to create new entries in NOMAD.
         """
         parent_workflow_id = workflow.info().workflow_id
+        base_info = {
+            'upload_id': data.upload_id,
+            'user_id': data.user_id,
+            'action_instance_id': data.action_instance_id,
+        }
         try:
             if not data.text and not data.prompt:
                 self.events.publish(
@@ -256,7 +266,7 @@ class ExtractionRouterWorkflow:
                 result = await workflow.execute_child_workflow(
                     ExtractPDFWorkflow.run,
                     data,
-                    id=f'extract-pdf-workflow::{parent_workflow_id}',
+                    id=f'extract-pdf-workflow::{parent_workflow_id.split("::")[1]}',
                 )
             else:
                 self.events.publish(
@@ -268,10 +278,11 @@ class ExtractionRouterWorkflow:
                         timestamp=workflow.now(),
                     )
                 )
+                data.name = 'text_input'
                 result = await workflow.execute_child_workflow(
                     ExtractTextWorkflow.run,
                     data,
-                    id=f'extract-text-workflow::{parent_workflow_id}',
+                    id=f'extract-text-workflow::{parent_workflow_id.split("::")[1]}',
                 )
             if result['success'] is False:
                 if result.get('result', {}) == {}:
@@ -287,14 +298,13 @@ class ExtractionRouterWorkflow:
                 )
 
             processing_input = ProcessNewFilesInput(
-                upload_id=data.upload_id,
-                user_id=data.user_id,
                 results=result['result'],
+                **base_info,
             )
             proccesing_result = await workflow.execute_child_workflow(
                 ProcessExtractionsWorkflow.run,
                 processing_input,
-                id=f'process-extractions-workflow::{parent_workflow_id}',
+                id=f'process-extractions-workflow::{parent_workflow_id.split("::")[1]}',
             )
             if not proccesing_result.get('success'):
                 return failed_result(proccesing_result.get('errors'), refs=[])
@@ -325,16 +335,20 @@ class ProcessExtractionsWorkflow:
 
         result_paths = []
         result_entry_refs = []
+        base_info = {
+            'upload_id': data.upload_id,
+            'user_id': data.user_id,
+            'action_instance_id': data.action_instance_id,
+        }
         try:
             for name, extraction in data.results.items():
                 workflow.logger.info(f'Processing extraction for {name}: {extraction}')
                 save_paths = await workflow.execute_activity(
                     dump_extractions,
                     ActionFileHandlerInput(
-                        upload_id=data.upload_id,
-                        user_id=data.user_id,
                         name=f'{name}_extracted',
                         data=extraction,
+                        **base_info,
                     ),
                     start_to_close_timeout=timedelta(seconds=60),
                     retry_policy=default_retry_policy,
@@ -344,9 +358,8 @@ class ProcessExtractionsWorkflow:
                 )
                 result_paths.extend(save_paths)
             input_for_processing = ProcessNewFilesInput(
-                upload_id=data.upload_id,
-                user_id=data.user_id,
                 results={'paths': result_paths},
+                **base_info,
             )
             processing_result = await workflow.execute_activity(
                 process_new_files,
@@ -391,11 +404,14 @@ class ExtractPDFWorkflow:
         extractions = {}
         list_of_pdfs = {'pdfs': [], 'texts': []}
         pdf_errors = []
+        base_info = {
+            'upload_id': data.upload_id,
+            'user_id': data.user_id,
+            'action_instance_id': data.action_instance_id,
+        }
         action_metadata = ActionFileHandlerInput(
-            upload_id=data.upload_id,
-            user_id=data.user_id,
-            action_instance_id=data.action_instance_id,
             action_file_refs=data.pdfs,
+            **base_info,
         )
         use_asset_refs = data.pdfs is not None and len(data.pdfs) > 0
         try:
@@ -464,7 +480,7 @@ class ExtractPDFWorkflow:
                 extraction_result = await workflow.execute_child_workflow(
                     ExtractTextWorkflow.run,
                     single_extraction_input,
-                    id=f'extraction-workflow-{pdf}::{parent_workflow_id}',
+                    id=f'extraction-workflow-{pdf}::{parent_workflow_id.split("::")[1]}',
                 )
                 if extraction_result['success'] is False:
                     nested_errors = normalize_errors(extraction_result.get('errors'))
@@ -530,12 +546,8 @@ class ExtractTextWorkflow:
     @workflow.run
     async def run(self, data: ExtractionWorkflowInput) -> dict:
         parent_workflow_id = workflow.info().workflow_id
-        name = data.name or data.upload_id
-        workflow.logger.info(f'Running LLM extraction workflow for {name}')
+        workflow.logger.info(f'Running LLM extraction workflow from {data.name}')
         errors = []
-        retry_policy = RetryPolicy(
-            maximum_attempts=3,
-        )
         try:
             if not data.text and not data.prompt:
                 error_msg = 'No text or prompt provided.'
@@ -562,8 +574,8 @@ class ExtractTextWorkflow:
             extraction_result = await workflow.execute_child_workflow(
                 ExtractionWorkflow.run,
                 extraction_workflow_input,
-                id=f'extraction-workflow::{parent_workflow_id}',
-                retry_policy=retry_policy,
+                id=f'pipeline-extraction-workflow::{parent_workflow_id.split("::")[1]}',
+                retry_policy=default_retry_policy,
             )
             if extraction_result.err_message:
                 error_msg = extraction_result.err_message
@@ -601,7 +613,7 @@ class ExtractTextWorkflow:
             workflow.logger.info(
                 f'Processed extractions ready for NOMAD upload: {processed_extractions}'
             )
-            return successful_result(result={name: processed_extractions})
+            return successful_result(result={data.name: processed_extractions})
         except Exception as e:
             workflow.logger.exception(
                 f'Unexpected exception in ExtractTextWorkflow: {e}'
