@@ -156,7 +156,9 @@ class LLMEngineConfig(BaseModel):
 
     @field_serializer('api_key', when_used='json')
     def dump_secret(self, v):
-        return v.get_secret_value()
+        # api_key is optional (the engine falls back to the provider env
+        # var); a None must survive serialization instead of crashing
+        return v.get_secret_value() if v is not None else None
 
 
 class ExtractionWorkflowInput(BaseModel):
