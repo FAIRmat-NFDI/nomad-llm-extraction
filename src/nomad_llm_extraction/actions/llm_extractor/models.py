@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from nomad.actions.assets.models import ActionAssetRef
 from pydantic import BaseModel, Field, SecretStr, field_serializer
@@ -123,9 +123,9 @@ class ExtractionActionInput(BaseModel):
         ..., description='Unique identifier for the user who initiated the action.'
     )
     api_token: SecretStr = Field(..., description='API token for LLM access.')
-    extraction_m_def: str = Field(
+    extraction_m_defs: list[str] = Field(
         ...,
-        description='Nomad Section m_def to be used for extraction.',
+        description='List of Nomad Section m_defs to be used for extraction.',
         # examples=MDEF_LIST,
     )
     model: str = Field(
@@ -210,11 +210,20 @@ class ExtractionActionInput(BaseModel):
             _get_section_names,
         )
 
-        class DynamicExtractionActionInput(cls):  # type: ignore
-            extraction_m_def: str = Field(
+        extraction_m_def = Annotated[
+            str,
+            Field(
                 ...,
                 description='Nomad Section m_def to be used for extraction.',
                 examples=_get_section_names(),
+            ),
+        ]
+
+        class DynamicExtractionActionInput(cls):  # type: ignore
+            extraction_m_defs: list[extraction_m_def] = Field(
+                ...,
+                description='List of Nomad Section m_defs to be used for extraction.',
+                min_length=1,
             )
 
         return DynamicExtractionActionInput
