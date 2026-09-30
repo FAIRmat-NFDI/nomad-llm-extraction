@@ -16,6 +16,16 @@ MAX_ATTEMPT_NUM = 100  # attempts to reprocess upload with new entries
 ACTION_NAME = 'nomad_llm_extraction_action'
 
 
+def _get_upload_files(upload_id: str, user_id: str):
+    try:
+        from nomad.uploads import get_upload_files
+    except ImportError:
+        # nomad-lab before its actions refactoring, which moved the function
+        from nomad.actions.manager import get_upload_files
+
+    return get_upload_files(upload_id, user_id)
+
+
 @activity.defn(name=f'{ACTION_NAME}.logging')
 def log_message(message: str) -> None:
     """
@@ -65,8 +75,6 @@ def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
     """
     Find all PDF files in the upload if authorized user has access to the upload.
     """
-    from nomad.actions.manager import get_upload_files
-
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
     from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
 
@@ -74,7 +82,7 @@ def get_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
     )
     pdfs = []
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
@@ -137,11 +145,9 @@ def save_uploaded_pdfs(input_data: ActionFileHandlerInput) -> dict:
 
 @activity.defn(name=f'{ACTION_NAME}.get_config')
 def get_config(input_data):
-    from nomad.actions.manager import get_upload_files
-
     from nomad_llm_extraction.utils.utils import load_yaml_config
 
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
@@ -171,15 +177,13 @@ def get_config(input_data):
 def get_text_from_pdf_upload(
     input_data: ActionFileHandlerInput,
 ) -> tuple[str | None, str | None]:
-    from nomad.actions.manager import get_upload_files
-
     from nomad_llm_extraction.pipeline.input_sources.paper import PDFParser
     from nomad_llm_extraction.utils.utils import extract_doi_from_pdf
 
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
     )
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
@@ -220,9 +224,7 @@ def default_postprocessing(input_data: PostProcessingInput) -> dict:
 
 @activity.defn(name=f'{ACTION_NAME}.dump_extractions')
 async def dump_extractions(input_data: ActionFileHandlerInput):
-    from nomad.actions.manager import get_upload_files
-
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
@@ -242,10 +244,9 @@ async def dump_extractions(input_data: ActionFileHandlerInput):
 
 
 def get_upload(upload_id: str, user_id: str):
-    from nomad.actions.manager import get_upload_files
     from nomad.processing.data import Upload
 
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         upload_id,
         user_id,
     )
@@ -377,12 +378,10 @@ def remove_source_pdfs(input_data: CleanupInput) -> None:
     """
     Remove source PDF files from the upload after extraction.
     """
-    from nomad.actions.manager import get_upload_files
-
     logger = get_logger(__name__).bind(
         workflow=activity.info().workflow_type, activity=activity.info().activity_type
     )
-    upload_files = get_upload_files(
+    upload_files = _get_upload_files(
         input_data.upload_id,
         input_data.user_id,
     )
