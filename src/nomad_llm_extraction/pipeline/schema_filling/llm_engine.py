@@ -11,6 +11,54 @@ import logging
 logging.getLogger('LiteLLM').setLevel(logging.CRITICAL)
 
 
+def enforceable_schema(schema: Any) -> Any:
+    """The schema as the providers can enforce it: `oneOf` becomes `anyOf`,
+    `const` becomes a one-value `enum`, `discriminator` goes.
+
+    Pydantic writes a discriminated union (`A | B` told apart by a field)
+    as `oneOf` plus `discriminator`. Structured output at Gemini and
+    OpenAI accepts `anyOf` only, and litellm's rewrite for Gemini drops
+    `oneOf` altogether: the model was then free to answer anything in
+    that place, while the answer was still validated against the full
+    schema, so every answer failed and the retries could not help. For
+    branches that cannot both match (a discriminated union) `anyOf` says
+    the same thing; where they could, it is looser for the model only:
+    the answer is validated against the caller's schema as before. The
+    same rewrite drops `const` (pydantic's one-value Literal, the tag of
+    such a union); `enum` is kept everywhere. Applied for every provider,
+    so the model sees the same schema whatever the engine. The caller's
+    dict is left as it is."""
+    if isinstance(schema, list):
+        return [enforceable_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key == 'discriminator':
+            continue
+        if key in ('oneOf', 'anyOf'):
+            out['anyOf'] = out.get('anyOf', []) + enforceable_schema(value)
+        elif key == 'const':
+            out.setdefault('enum', [value])
+        elif key == 'enum':
+            out['enum'] = list(value)
+        else:
+            out[key] = enforceable_schema(value)
+    return out
+
+
+def _schema_dict(json_schema: str | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(json_schema, str):
+        import json
+
+        try:
+            return json.loads(json_schema)
+        except json.JSONDecodeError as e:
+            logger.error(f'Invalid JSON schema string: {e}')
+            raise
+    return json_schema
+
+
 def format_tool_call_schema(schema: dict[str, Any]) -> dict:
     # adapted from https://github.com/567-labs/instructor/blob/47fdb2ca07119d389a3c0e8bc28b9930b814f294/instructor/v2/providers/openai/schema.py
     parameters = {k: v for k, v in schema.items() if k not in ('title', 'description')}
@@ -115,7 +163,7 @@ class LiteLLMEngine(StructuredLLMEngine):
         response_format = {
             'type': 'json_schema',
             'json_schema': {
-                'schema': json_schema,
+                'schema': enforceable_schema(_schema_dict(json_schema)),
                 'strict': True,
                 'name': 'ResponseSchema',
             },
@@ -148,14 +196,7 @@ class LiteLLMEngine(StructuredLLMEngine):
     ) -> str:
         from litellm import completion
 
-        if isinstance(json_schema, str):
-            import json
-
-            try:
-                json_schema = json.loads(json_schema)
-            except json.JSONDecodeError as e:
-                logger.error(f'Invalid JSON schema string: {e}')
-                raise
+        json_schema = enforceable_schema(_schema_dict(json_schema))
         params_to_use = {**optional_params}
         self.check_additional_params(optional_params)
         formatted_schema = format_tool_call_schema(json_schema)
