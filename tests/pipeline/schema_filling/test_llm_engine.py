@@ -5,47 +5,38 @@ import pytest
 
 from nomad_llm_extraction.pipeline.schema_filling import llm_engine
 
-# what pydantic writes for `unresolved: list[Ambiguous | NotFound]` with
-# `Field(discriminator='reason')`
+# what pydantic writes for `shape: Circle | Square` with
+# `Field(discriminator='kind')`: each branch pins `kind` with `const`
 UNION_SCHEMA = {
     '$defs': {
-        'Ambiguous': {
+        'Circle': {
             'type': 'object',
             'properties': {
-                'reason': {'const': 'ambiguous', 'type': 'string'},
-                'candidates': {'type': 'array', 'items': {'enum': ['C001', 'C002']}},
-                'said': {'type': 'string'},
+                'kind': {'const': 'circle', 'type': 'string'},
+                'radius': {'type': 'number'},
             },
-            'required': ['reason', 'candidates', 'said'],
-            'additionalProperties': False,
+            'required': ['kind', 'radius'],
         },
-        'NotFound': {
+        'Square': {
             'type': 'object',
             'properties': {
-                'reason': {'const': 'not_found', 'type': 'string'},
-                'said': {'type': 'string'},
+                'kind': {'const': 'square', 'type': 'string'},
+                'side': {'type': 'number'},
             },
-            'required': ['reason', 'said'],
-            'additionalProperties': False,
+            'required': ['kind', 'side'],
         },
     },
     'type': 'object',
     'properties': {
-        'unresolved': {
-            'type': 'array',
-            'items': {
-                'oneOf': [{'$ref': '#/$defs/Ambiguous'}, {'$ref': '#/$defs/NotFound'}],
-                'discriminator': {
-                    'propertyName': 'reason',
-                    'mapping': {
-                        'ambiguous': '#/$defs/Ambiguous',
-                        'not_found': '#/$defs/NotFound',
-                    },
-                },
+        'shape': {
+            'oneOf': [{'$ref': '#/$defs/Circle'}, {'$ref': '#/$defs/Square'}],
+            'discriminator': {
+                'propertyName': 'kind',
+                'mapping': {'circle': '#/$defs/Circle', 'square': '#/$defs/Square'},
             },
         }
     },
-    'required': ['unresolved'],
+    'required': ['shape'],
 }
 
 
@@ -54,19 +45,15 @@ def test_enforceable_schema_turns_oneof_into_anyof_and_drops_the_discriminator()
 
     out = llm_engine.enforceable_schema(given)
 
-    items = out['properties']['unresolved']['items']
-    assert items == {
-        'anyOf': [{'$ref': '#/$defs/Ambiguous'}, {'$ref': '#/$defs/NotFound'}]
+    assert out['properties']['shape'] == {
+        'anyOf': [{'$ref': '#/$defs/Circle'}, {'$ref': '#/$defs/Square'}]
     }
     # the tag of each branch is an enum of one, the rest is as given
-    assert out['$defs']['NotFound']['properties']['reason'] == {
-        'enum': ['not_found'],
-        'type': 'string',
+    assert out['$defs']['Circle']['properties'] == {
+        'kind': {'enum': ['circle'], 'type': 'string'},
+        'radius': {'type': 'number'},
     }
-    assert (
-        out['$defs']['Ambiguous']['properties']['candidates']
-        == (UNION_SCHEMA['$defs']['Ambiguous']['properties']['candidates'])
-    )
+    assert out['required'] == ['shape']
     assert given == UNION_SCHEMA  # the caller's schema is not touched
 
 
@@ -90,7 +77,7 @@ def test_enforceable_schema_rewrites_at_any_depth_and_keeps_an_existing_anyof():
 
 def test_the_union_survives_litellms_rewrite_for_gemini():
     """The failure this guards against: litellm's Gemini schema builder
-    drops `oneOf`, leaving `items: {}`, while the answer is still validated
+    drops `oneOf`, leaving `shape: {}`, while the answer is still validated
     against the full schema."""
     common_utils = pytest.importorskip('litellm.llms.vertex_ai.common_utils')
     build = getattr(common_utils, '_build_vertex_schema', None)
@@ -100,11 +87,11 @@ def test_the_union_survives_litellms_rewrite_for_gemini():
     as_given = build(copy.deepcopy(UNION_SCHEMA))
     as_sent = build(llm_engine.enforceable_schema(UNION_SCHEMA))
 
-    assert as_given['properties']['unresolved']['items'] == {}
-    branches = as_sent['properties']['unresolved']['items']['anyOf']
-    assert [b['properties']['reason'] for b in branches] == [
-        {'enum': ['ambiguous'], 'type': 'string'},
-        {'enum': ['not_found'], 'type': 'string'},
+    assert as_given['properties']['shape'] == {}
+    branches = as_sent['properties']['shape']['anyOf']
+    assert [b['properties']['kind'] for b in branches] == [
+        {'enum': ['circle'], 'type': 'string'},
+        {'enum': ['square'], 'type': 'string'},
     ]
 
 
